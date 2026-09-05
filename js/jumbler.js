@@ -5,12 +5,18 @@
 
   const state = {
     lines: [],
+    groups: Object.create(null),
     word: "",
     jumble: "",
+    others: [],
     revealed: false,
     status: "loading",
     message: "loading letters…",
   };
+
+  function signature(word) {
+    return word.toLowerCase().split("").sort().join("");
+  }
 
   function resize() {
     const dpr = Math.max(1, window.devicePixelRatio || 1);
@@ -25,6 +31,8 @@
   function parseLetters(text) {
     const raw = text.replace(/^\uFEFF/, "").split(/\r\n|\n|\r/);
     const lines = [];
+    const groups = Object.create(null);
+
     for (let i = 0; i < WORD_LENS.length; i++) {
       const line = (raw[i] || "").replace(/\s+/g, "");
       const len = WORD_LENS[i];
@@ -32,8 +40,20 @@
         throw new Error("line " + (i + 1) + " is not a clean pack of " + len + "-letter words");
       }
       lines.push(line);
+
+      const seen = Object.create(null);
+      for (let pos = 0; pos < line.length; pos += len) {
+        const word = line.substr(pos, len).toUpperCase();
+        if (seen[word]) continue;
+        seen[word] = true;
+        const key = len + ":" + signature(word);
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(word);
+      }
     }
-    return lines;
+
+    for (const key in groups) groups[key].sort();
+    return { lines, groups };
   }
 
   function pickWord() {
@@ -43,6 +63,12 @@
     const count = packed.length / len;
     const index = Math.floor(Math.random() * count);
     return packed.substr(index * len, len).toUpperCase();
+  }
+
+  function anagramsOf(word) {
+    const key = word.length + ":" + signature(word);
+    const group = state.groups[key] || [word];
+    return group.filter((w) => w !== word);
   }
 
   function scramble(word) {
@@ -65,6 +91,7 @@
     if (state.status !== "ready") return;
     state.word = pickWord();
     state.jumble = scramble(state.word);
+    state.others = anagramsOf(state.word);
     state.revealed = false;
     draw();
   }
@@ -89,6 +116,23 @@
     return size;
   }
 
+  function wrapLine(text, maxWidth) {
+    const words = text.split(" ");
+    const lines = [];
+    let current = "";
+    for (let i = 0; i < words.length; i++) {
+      const next = current ? current + "  " + words[i] : words[i];
+      if (current && ctx.measureText(next).width > maxWidth) {
+        lines.push(current);
+        current = words[i];
+      } else {
+        current = next;
+      }
+    }
+    if (current) lines.push(current);
+    return lines;
+  }
+
   function draw() {
     const w = window.innerWidth;
     const h = window.innerHeight;
@@ -109,12 +153,26 @@
 
     const maxWidth = w * 0.86;
     const size = fitFont(display, maxWidth, Math.min(w, h) * 0.18);
+    const mainY = state.revealed && state.others.length ? h * 0.44 : h / 2;
 
     ctx.fillStyle = color;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.font = "700 " + size + "px system-ui, sans-serif";
-    ctx.fillText(display, w / 2, h / 2);
+    ctx.fillText(display, w / 2, mainY);
+
+    if (state.status === "ready" && state.revealed && state.others.length) {
+      const altSize = Math.max(16, Math.min(w, h) * 0.038);
+      ctx.fillStyle = "#c8c8c8";
+      ctx.font = "500 " + altSize + "px system-ui, sans-serif";
+      ctx.textBaseline = "top";
+      const lines = wrapLine(state.others.join("  "), maxWidth);
+      const startY = mainY + size * 0.7;
+      const lineH = altSize * 1.35;
+      for (let i = 0; i < lines.length; i++) {
+        ctx.fillText(lines[i], w / 2, startY + i * lineH);
+      }
+    }
 
     ctx.fillStyle = "#888888";
     ctx.font = "500 " + Math.max(14, Math.min(w, h) * 0.028) + "px system-ui, sans-serif";
@@ -139,7 +197,9 @@
       return res.text();
     })
     .then((text) => {
-      state.lines = parseLetters(text);
+      const parsed = parseLetters(text);
+      state.lines = parsed.lines;
+      state.groups = parsed.groups;
       state.status = "ready";
       nextWord();
     })
