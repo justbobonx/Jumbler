@@ -154,7 +154,7 @@
       cell.setLetter(ch);
       if (!ch) cell.setMode("idle");
       else if (state.phase === "correct" || state.phase === "revealed") cell.setMode("correct");
-      else if (state.phase === "wrong") cell.setMode("wrong");
+      else if (state.phase === "wrong") cell.setMode("wrong";
       else cell.setMode("selected");
     }
   }
@@ -247,21 +247,8 @@
   }
 
   function tapSource(index) {
-    if (state.phase !== "play" && state.phase !== "wrong") return;
-
-    const already = state.picked.indexOf(index);
-    if (already !== -1) {
-      if (already === state.picked.length - 1) {
-        state.picked.pop();
-        state.guess = state.guess.slice(0, -1);
-        if (state.phase === "wrong") state.phase = "play";
-        applyPlayModes();
-        draw();
-      }
-      return;
-    }
-
-    if (state.phase === "wrong") return;
+    if (state.phase !== "play") return;
+    if (state.picked.indexOf(index) !== -1) return;
     if (state.guess.length >= state.jumble.length) return;
     state.picked.push(index);
     state.guess += state.sourceCells[index].letter;
@@ -270,8 +257,22 @@
     if (state.guess.length === state.jumble.length) scoreGuess();
   }
 
+  function tapGuess(index) {
+    if (state.phase !== "play" && state.phase !== "wrong") return;
+    if (index < 0 || index >= state.guess.length) return;
+    state.picked.splice(index, 1);
+    state.guess = state.guess.slice(0, index) + state.guess.slice(index + 1);
+    if (state.phase === "wrong") state.phase = "play";
+    applyPlayModes();
+    draw();
+  }
+
   function reveal() {
     if (state.phase === "loading" || state.phase === "error" || state.phase === "revealed") return;
+    if (state.phase === "play" || state.phase === "wrong") {
+      state.score -= 20;
+      if (!state.lastResult) state.lastResult = "wrong";
+    }
     state.phase = "revealed";
     state.picked = [];
     state.guess = state.word;
@@ -315,6 +316,12 @@
       else if (btn.id === "next") nextWord();
       else if (btn.id === "reset") resetGuess();
       return;
+    }
+    for (let i = 0; i < state.guessCells.length; i++) {
+      if (state.guessCells[i].contains(p.x, p.y)) {
+        tapGuess(i);
+        return;
+      }
     }
     for (let i = 0; i < state.sourceCells.length; i++) {
       if (state.sourceCells[i].contains(p.x, p.y)) {
@@ -386,9 +393,9 @@
 
     const hint = hintText();
     if (hint) {
-      ctx.fillStyle = state.phase === "wrong" || state.lastResult === "wrong" && state.phase === "revealed"
+      ctx.fillStyle = state.phase === "wrong" || (state.lastResult === "wrong" && state.phase === "revealed")
         ? "#ff6b6b"
-        : state.phase === "correct" || state.lastResult === "right" && state.phase === "revealed"
+        : state.phase === "correct" || (state.lastResult === "right" && state.phase === "revealed")
           ? "#7dffa3"
           : "#666666";
       ctx.textAlign = "center";
