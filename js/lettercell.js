@@ -1,21 +1,51 @@
 class LetterCell {
+  static STYLES = {
+    idle: {
+      letterColor: "#8a8a8a",
+      borderColor: "#6a6a6a",
+      fillColor: "rgba(255,255,255,0.03)",
+    },
+    selected: {
+      letterColor: "#ffffff",
+      borderColor: "#d8d8d8",
+      fillColor: "rgba(255,255,255,0.08)",
+    },
+    correct: {
+      letterColor: "#7dffa3",
+      borderColor: "#4d8f64",
+      fillColor: "rgba(125,255,163,0.08)",
+    },
+    wrong: {
+      letterColor: "#ff6b6b",
+      borderColor: "#8f4d4d",
+      fillColor: "rgba(255,107,107,0.08)",
+    },
+  };
+
   constructor(letter, x, y, size, options) {
     options = options || {};
     this.letter = letter || "";
     this.x = x;
     this.y = y;
     this.size = size;
-    this.letterColor = options.letterColor || "#f2f2f2";
-    this.borderColor = options.borderColor || "#8a8a8a";
-    this.fillColor = options.fillColor || "rgba(255,255,255,0.03)";
     this.lineWidth = options.lineWidth == null ? 1.25 : options.lineWidth;
-    this.radius = options.radius == null ? size * 0.16 : options.radius;
+    this.radius = options.radius == null ? size * 0.12 : options.radius;
     this.fontFamily = options.fontFamily || "system-ui, sans-serif";
     this.fontWeight = options.fontWeight || "700";
+    this.mode = options.mode || "idle";
+    this.setStyle(LetterCell.STYLES[this.mode]);
+    if (options.letterColor) this.letterColor = options.letterColor;
+    if (options.borderColor) this.borderColor = options.borderColor;
+    if (options.fillColor) this.fillColor = options.fillColor;
   }
 
   setLetter(letter) {
     this.letter = letter || "";
+  }
+
+  setMode(mode) {
+    this.mode = mode;
+    this.setStyle(LetterCell.STYLES[mode] || LetterCell.STYLES.idle);
   }
 
   setStyle(options) {
@@ -50,12 +80,12 @@ class LetterCell {
 
     if (!this.letter) return;
 
-    const fontSize = Math.floor(this.size * 0.62);
+    const fontSize = Math.floor(this.size * 0.9);
     ctx.fillStyle = this.letterColor;
     ctx.font = this.fontWeight + " " + fontSize + "px " + this.fontFamily;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(this.letter, this.centerX, this.centerY + this.size * 0.02);
+    ctx.fillText(this.letter, this.centerX, this.centerY + this.size * 0.015);
   }
 
   static roundRect(ctx, x, y, w, h, r) {
@@ -74,14 +104,14 @@ class LetterCell {
 
   static row(word, centerX, centerY, size, gap, options) {
     const letters = String(word).split("");
-    const n = letters.length;
+    const n = Math.max(letters.length, options && options.count ? options.count : 0);
     if (!n) return [];
     const total = n * size + (n - 1) * gap;
     const x0 = centerX - total / 2;
     const y0 = centerY - size / 2;
     const cells = [];
     for (let i = 0; i < n; i++) {
-      cells.push(new LetterCell(letters[i], x0 + i * (size + gap), y0, size, options));
+      cells.push(new LetterCell(letters[i] || "", x0 + i * (size + gap), y0, size, options));
     }
     return cells;
   }
