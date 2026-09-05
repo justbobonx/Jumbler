@@ -100,12 +100,6 @@
     return Math.max(22, Math.min(maxSize, size));
   }
 
-  function sourceMode() {
-    if (state.phase === "correct" || state.phase === "revealed") return "correct";
-    if (state.phase === "wrong") return "wrong";
-    return "idle";
-  }
-
   function applyPlayModes() {
     const used = Object.create(null);
     for (let i = 0; i < state.picked.length; i++) used[state.picked[i]] = true;
@@ -149,7 +143,7 @@
 
     const guessSize = cellSizeFor(n, maxWidth * 0.78, Math.min(w, h) * 0.09);
     const guessGap = Math.max(4, Math.round(guessSize * 0.08));
-    state.guessCells = LetterCell.row("".repeat(n), w / 2, mainY - mainSize * 0.5 - guessSize * 0.95, guessSize, guessGap, { count: n });
+    state.guessCells = LetterCell.row("", w / 2, mainY - mainSize * 0.5 - guessSize * 0.95, guessSize, guessGap, { count: n });
 
     if (showAnswers) {
       const words = state.answers;
@@ -259,7 +253,7 @@
   }
 
   function nextWord() {
-    if (state.phase === "loading" || state.phase === "error") return;
+    if (state.phase === "error" || !state.lines.length) return;
     clearTimeout(state.lockTimer);
     state.word = pickWord();
     state.jumble = scramble(state.word);
