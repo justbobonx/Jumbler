@@ -1,6 +1,12 @@
 (() => {
   const WORD_LENS = [5, 6, 7, 8];
-  const VERSION = window.VERSION || "0.5.0";
+  const VERSION = window.VERSION || "0.6.0";
+  const PLAYERS = [
+    { name: "red", fill: "#c23b3b", text: "#ffffff" },
+    { name: "blue", fill: "#2b6cb0", text: "#ffffff" },
+    { name: "yellow", fill: "#d4b22a", text: "#1a1a1a" },
+    { name: "purple", fill: "#7a3db3", text: "#ffffff" },
+  ];
   const canvas = document.getElementById("stage");
   const ctx = canvas.getContext("2d");
   const container = document.getElementById("game-container");
@@ -25,6 +31,8 @@
     extraSize: 16,
     hintY: 0,
     buttons: [],
+    pads: [],
+    stepper: [],
     rights: 0,
     wrongs: 0,
     score: 0,
@@ -32,7 +40,16 @@
     missedThisWord: false,
     playChrome: false,
     chromeWait: null,
+    lockTimer: 0,
+    playerCount: 1,
+    playerScores: [0, 0, 0, 0],
+    locked: [false, false, false, false],
+    activePlayer: -1,
   };
+
+  function isMulti() {
+    return state.playerCount > 1;
+  }
 
   function viewSize() {
     return {
@@ -227,6 +244,12 @@
     return state.answers.filter((w) => w !== shown);
   }
 
+  function remainingPlayers() {
+    let n = 0;
+    for (let i = 0; i < state.playerCount; i++) if (!state.locked[i]) n += 1;
+    return n;
+  }
+
   function bigWord() {
     if (state.phase === "correct") return state.guess || state.word;
     if (state.phase === "revealed") return state.word;
@@ -241,7 +264,11 @@
   }
 
   function hintText() {
-    if (state.phase === "play") return "tap letters to spell";
+    if (state.phase === "buzz") return "buzz in";
+    if (state.phase === "play") {
+      if (isMulti() && state.activePlayer >= 0) return PLAYERS[state.activePlayer].name + " · tap letters to spell";
+      return "tap letters to spell";
+    }
     if (state.phase === "wrong") return "wrong";
     if (state.phase === "correct") return "right";
     if (state.phase === "revealed") return state.lastResult === "wrong" ? "wrong" : state.lastResult === "right" ? "right" : "";
@@ -272,6 +299,11 @@
     }
   }
 
+  function buttonLabel(id) {
+    if (id === "reveal") return "GIVE UP";
+    return id.toUpperCase();
+  }
+
   function placeButtons(ids, w, h) {
     const btnW = Math.max(100, Math.min(148, w * 0.24));
     const btnH = Math.max(36, Math.min(44, h * 0.06));
@@ -282,7 +314,7 @@
     for (let i = 0; i < ids.length; i++) {
       state.buttons.push({
         id: ids[i],
-        label: ids[i].toUpperCase(),
+        label: buttonLabel(ids[i]),
         x: x,
         y: y,
         w: btnW,
@@ -292,6 +324,59 @@
     }
   }
 
+  function padSize(w, h) {
+    return Math.max(64, Math.min(96, w * 0.16, h * 0.22));
+  }
+
+  function layoutPads(w, h) {
+    state.pads = [];
+    const n = state.playerCount;
+    const s = padSize(w, h);
+    const pad = 16;
+    const bottomClear = 72;
+    const spots = [];
+    if (n === 2) {
+      spots.push({ x: pad, y: h / 2 - s / 2 });
+      spots.push({ x: w - pad - s, y: h / 2 - s / 2 });
+    } else if (n === 3) {
+      spots.push({ x: pad, y: h / 2 - s / 2 });
+      spots.push({ x: w - pad - s, y: h / 2 - s / 2 });
+      spots.push({ x: w / 2 - s / 2, y: pad });
+    } else {
+      spots.push({ x: pad, y: pad });
+      spots.push({ x: w - pad - s, y: pad });
+      spots.push({ x: pad, y: h - bottomClear - s });
+      spots.push({ x: w - pad - s, y: h - bottomClear - s });
+    }
+    for (let i = 0; i < n; i++) {
+      state.pads.push({
+        i: i,
+        x: spots[i].x,
+        y: spots[i].y,
+        w: s,
+        h: s,
+      });
+    }
+  }
+
+  function layoutStepper(w, h, titleBottom) {
+    state.stepper = [];
+    const box = Math.max(36, Math.min(44, h * 0.06));
+    const label = state.playerCount === 1 ? "1 player" : state.playerCount + " players";
+    ctx.font = "600 16px system-ui, sans-serif";
+    const labelW = Math.max(110, ctx.measureText(label).width + 16);
+    const gap = 12;
+    const total = box + gap + labelW + gap + box;
+    let x = w / 2 - total / 2;
+    const y = titleBottom + 28;
+    state.stepper.push({ id: "minus", x: x, y: y, w: box, h: box });
+    x += box + gap;
+    state.stepper.push({ id: "label", x: x, y: y, w: labelW, h: box });
+    x += labelW + gap;
+    state.stepper.push({ id: "plus", x: x, y: y, w: box, h: box });
+    return y + box;
+  }
+
   function layoutTitle() {
     const sizeV = viewSize();
     const w = sizeV.w;
@@ -299,8 +384,20 @@
     const title = "JUMBLER";
     const size = cellSizeFor(title.length, w * 0.86, Math.min(w, h) * 0.16);
     const gap = Math.max(5, Math.round(size * 0.08));
-    state.titleCells = LetterCell.row(title, w / 2, h * 0.42, size, gap, { mode: "revealed" });
-    placeButtons(["start"], w, h);
+    const titleY = h * 0.34;
+    state.titleCells = LetterCell.row(title, w / 2, titleY, size, gap, { mode: "revealed" });
+    const titleBottom = titleY + size / 2;
+    const stepperBottom = layoutStepper(w, h, titleBottom);
+    const btnW = Math.max(100, Math.min(148, w * 0.24));
+    const btnH = Math.max(36, Math.min(44, h * 0.06));
+    state.buttons.push({
+      id: "start",
+      label: "START",
+      x: w / 2 - btnW / 2,
+      y: stepperBottom + 22,
+      w: btnW,
+      h: btnH,
+    });
   }
 
   function layout() {
@@ -309,6 +406,8 @@
     state.titleCells = [];
     state.extraText = [];
     state.buttons = [];
+    state.pads = [];
+    state.stepper = [];
     if (state.phase === "loading" || state.phase === "error") return;
     if (state.phase === "title") {
       layoutTitle();
@@ -319,33 +418,46 @@
     const w = sizeV.w;
     const h = sizeV.h;
     const n = state.jumble.length;
-    const maxWidth = w * 0.86;
+    const buzzing = isMulti() && state.phase === "buzz";
+    const maxWidth = buzzing ? w * 0.62 : w * 0.86;
+    const showGuess = !buzzing;
     const showExtras = (state.phase === "correct" || state.phase === "revealed") && extrasForDisplay().length;
-    const mainSize = cellSizeFor(n, maxWidth, Math.min(w, h) * 0.16);
+    const mainSize = cellSizeFor(n, maxWidth, Math.min(w, h) * (buzzing ? 0.14 : 0.16));
     const mainGap = Math.max(5, Math.round(mainSize * 0.08));
-    const mainY = showExtras ? h * 0.48 : h * 0.54;
+    const mainY = buzzing ? h * 0.5 : showExtras ? h * 0.48 : h * 0.54;
 
     state.sourceCells = LetterCell.row(bigWord(), w / 2, mainY, mainSize, mainGap);
 
-    const guessSize = cellSizeFor(n, maxWidth * 0.78, Math.min(w, h) * 0.09);
-    const guessGap = Math.max(4, Math.round(guessSize * 0.08));
-    const hintSpace = Math.max(26, guessSize * 0.7);
-    const guessY = mainY - mainSize * 0.5 - hintSpace - guessSize * 0.5;
-    state.guessCells = LetterCell.row("", w / 2, guessY, guessSize, guessGap, { count: n });
-    state.hintY = (guessY + guessSize / 2 + mainY - mainSize / 2) / 2;
+    if (showGuess) {
+      const guessSize = cellSizeFor(n, maxWidth * 0.78, Math.min(w, h) * 0.09);
+      const guessGap = Math.max(4, Math.round(guessSize * 0.08));
+      const hintSpace = Math.max(26, guessSize * 0.7);
+      const guessY = mainY - mainSize * 0.5 - hintSpace - guessSize * 0.5;
+      state.guessCells = LetterCell.row("", w / 2, guessY, guessSize, guessGap, { count: n });
+      state.hintY = (guessY + guessSize / 2 + mainY - mainSize / 2) / 2;
+    } else {
+      state.hintY = mainY - mainSize * 0.5 - 22;
+    }
 
     if (showExtras) {
       const extras = extrasForDisplay();
       const fontSize = Math.max(16, Math.min(w, h) * 0.034);
       ctx.font = "500 " + fontSize + "px system-ui, sans-serif";
-      state.extraText = wrapText(extras.join(" "), maxWidth);
+      state.extraText = wrapText(extras.join(" "), w * 0.86);
       state.extraY = mainY + mainSize * 0.5 + fontSize * 1.4;
       state.extraSize = fontSize;
     }
 
-    if (state.phase === "play" || state.phase === "wrong") placeButtons(["reset", "reveal"], w, h);
-    else if (state.phase === "correct") placeButtons(["reveal", "next"], w, h);
-    else if (state.phase === "revealed") placeButtons(["next"], w, h);
+    if (buzzing) {
+      layoutPads(w, h);
+      placeButtons(["reveal"], w, h);
+    } else if (state.phase === "play" || state.phase === "wrong") {
+      placeButtons(["reset", "reveal"], w, h);
+    } else if (state.phase === "correct") {
+      placeButtons(isMulti() ? ["next"] : ["reveal", "next"], w, h);
+    } else if (state.phase === "revealed") {
+      placeButtons(["next"], w, h);
+    }
 
     applyPlayModes();
   }
@@ -358,15 +470,47 @@
   }
 
   function startPlay() {
+    state.playerScores = [0, 0, 0, 0];
     enterPlayChrome().then(nextWord);
+  }
+
+  function changePlayers(delta) {
+    const next = Math.max(1, Math.min(4, state.playerCount + delta));
+    if (next === state.playerCount) return;
+    state.playerCount = next;
+    layout();
+    draw();
   }
 
   function resetGuess() {
     if (state.phase !== "play" && state.phase !== "wrong") return;
+    if (isMulti() && state.phase === "wrong") return;
     state.picked = [];
     state.guess = "";
     state.phase = "play";
     applyPlayModes();
+    draw();
+  }
+
+  function clearLock() {
+    if (state.lockTimer) {
+      clearTimeout(state.lockTimer);
+      state.lockTimer = 0;
+    }
+  }
+
+  function returnToBuzz() {
+    state.lockTimer = 0;
+    state.picked = [];
+    state.guess = "";
+    state.activePlayer = -1;
+    if (remainingPlayers() <= 0) {
+      state.phase = "revealed";
+      state.guess = state.word;
+    } else {
+      state.phase = "buzz";
+    }
+    layout();
     draw();
   }
 
@@ -375,15 +519,42 @@
     if (hit) {
       state.phase = "correct";
       state.lastResult = "right";
-      state.rights += 1;
-      state.score += 10 * state.guess.length;
-    } else {
-      state.phase = "wrong";
-      state.lastResult = "wrong";
-      state.missedThisWord = true;
-      state.wrongs += 1;
-      state.score -= 10;
+      if (isMulti() && state.activePlayer >= 0) {
+        state.playerScores[state.activePlayer] += 1;
+      } else {
+        state.rights += 1;
+        state.score += 10 * state.guess.length;
+      }
+      layout();
+      draw();
+      return;
     }
+
+    state.phase = "wrong";
+    state.lastResult = "wrong";
+    if (isMulti() && state.activePlayer >= 0) {
+      state.locked[state.activePlayer] = true;
+      layout();
+      draw();
+      clearLock();
+      state.lockTimer = setTimeout(returnToBuzz, 2000);
+      return;
+    }
+    state.missedThisWord = true;
+    state.wrongs += 1;
+    state.score -= 10;
+    layout();
+    draw();
+  }
+
+  function buzzIn(index) {
+    if (state.phase !== "buzz") return;
+    if (index < 0 || index >= state.playerCount) return;
+    if (state.locked[index]) return;
+    state.activePlayer = index;
+    state.picked = [];
+    state.guess = "";
+    state.phase = "play";
     layout();
     draw();
   }
@@ -401,6 +572,7 @@
 
   function tapGuess(index) {
     if (state.phase !== "play" && state.phase !== "wrong") return;
+    if (isMulti() && state.phase === "wrong") return;
     if (index < 0 || index >= state.guess.length) return;
     state.picked.splice(index, 1);
     state.guess = state.guess.slice(0, index) + state.guess.slice(index + 1);
@@ -411,7 +583,9 @@
 
   function reveal() {
     if (state.phase === "loading" || state.phase === "error" || state.phase === "title" || state.phase === "revealed") return;
-    if (state.phase !== "correct" && !state.missedThisWord) {
+    if (state.phase === "correct" && isMulti()) return;
+    clearLock();
+    if (!isMulti() && state.phase !== "correct" && !state.missedThisWord) {
       state.score -= 20;
       if (!state.lastResult) state.lastResult = "";
     }
@@ -424,15 +598,18 @@
 
   function nextWord() {
     if (state.phase === "error" || !state.lines.length) return;
+    clearLock();
     state.word = pickWord();
     state.jumble = scramble(state.word);
     state.answers = answersOf(state.word);
     state.others = state.answers.filter((w) => w !== state.word);
-    state.phase = "play";
     state.picked = [];
     state.guess = "";
     state.lastResult = "";
     state.missedThisWord = false;
+    state.activePlayer = -1;
+    state.locked = [false, false, false, false];
+    state.phase = isMulti() ? "buzz" : "play";
     layout();
     draw();
   }
@@ -447,10 +624,13 @@
     return { x: dy + canvas.clientWidth / 2, y: -dx + canvas.clientHeight / 2 };
   }
 
+  function hitBox(p, b) {
+    return p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
+  }
+
   function hitButton(p) {
     for (let i = 0; i < state.buttons.length; i++) {
-      const b = state.buttons[i];
-      if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) return b;
+      if (hitBox(p, state.buttons[i])) return state.buttons[i];
     }
     return null;
   }
@@ -458,6 +638,21 @@
   function onTap(e) {
     if (state.phase === "loading" || state.phase === "error") return;
     const p = pointFromEvent(e);
+
+    if (state.phase === "title") {
+      for (let i = 0; i < state.stepper.length; i++) {
+        const s = state.stepper[i];
+        if (s.id === "minus" && hitBox(p, s)) {
+          changePlayers(-1);
+          return;
+        }
+        if (s.id === "plus" && hitBox(p, s)) {
+          changePlayers(1);
+          return;
+        }
+      }
+    }
+
     const btn = hitButton(p);
     if (btn) {
       if (btn.id === "reveal") reveal();
@@ -466,7 +661,20 @@
       else if (btn.id === "reset") resetGuess();
       return;
     }
+
+    if (state.phase === "buzz") {
+      for (let i = 0; i < state.pads.length; i++) {
+        if (hitBox(p, state.pads[i])) {
+          buzzIn(state.pads[i].i);
+          return;
+        }
+      }
+      return;
+    }
+
     if (state.phase === "title") return;
+    if (isMulti() && state.phase === "wrong") return;
+
     for (let i = 0; i < state.guessCells.length; i++) {
       if (state.guessCells[i].contains(p.x, p.y)) {
         tapGuess(i);
@@ -496,7 +704,54 @@
     ctx.fillText(btn.label, btn.x + btn.w / 2, btn.y + btn.h / 2 + 1);
   }
 
+  function drawStepper() {
+    for (let i = 0; i < state.stepper.length; i++) {
+      const s = state.stepper[i];
+      if (s.id === "label") {
+        ctx.fillStyle = "#d0d0d0";
+        ctx.font = "600 16px system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const label = state.playerCount === 1 ? "1 player" : state.playerCount + " players";
+        ctx.fillText(label, s.x + s.w / 2, s.y + s.h / 2 + 1);
+        continue;
+      }
+      LetterCell.roundRect(ctx, s.x, s.y, s.w, s.h, 10);
+      ctx.fillStyle = "rgba(255,255,255,0.06)";
+      ctx.fill();
+      ctx.strokeStyle = "#888888";
+      ctx.lineWidth = 1.25;
+      ctx.stroke();
+      ctx.fillStyle = "#d0d0d0";
+      ctx.font = "700 20px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(s.id === "minus" ? "−" : "+", s.x + s.w / 2, s.y + s.h / 2 + 1);
+    }
+  }
+
+  function drawPads() {
+    for (let i = 0; i < state.pads.length; i++) {
+      const p = state.pads[i];
+      const spec = PLAYERS[p.i];
+      const locked = state.locked[p.i];
+      const r = Math.max(12, p.w * 0.16);
+      LetterCell.roundRect(ctx, p.x, p.y, p.w, p.h, r);
+      ctx.fillStyle = locked ? "#2a2a2a" : spec.fill;
+      ctx.fill();
+      ctx.strokeStyle = locked ? "#444444" : "rgba(255,255,255,0.25)";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.fillStyle = locked ? "#666666" : spec.text;
+      ctx.font = "700 " + Math.round(p.h * 0.42) + "px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(String(state.playerScores[p.i]), p.x + p.w / 2, p.y + p.h / 2 + 1);
+    }
+  }
+
   function drawScore(w, h) {
+    if (isMulti()) return;
     const y = 28;
     const fontSize = Math.max(14, Math.min(w, h) * 0.028);
     ctx.font = "600 " + fontSize + "px system-ui, sans-serif";
@@ -540,6 +795,7 @@
 
     if (state.phase === "title") {
       for (let i = 0; i < state.titleCells.length; i++) state.titleCells[i].draw(ctx);
+      drawStepper();
       for (let i = 0; i < state.buttons.length; i++) drawButton(state.buttons[i]);
       ctx.fillStyle = "#666666";
       ctx.textAlign = "right";
@@ -555,11 +811,11 @@
 
     const hint = hintText();
     if (hint) {
-      ctx.fillStyle = state.phase === "wrong" || (state.lastResult === "wrong" && state.phase === "revealed")
-        ? "#ff6b6b"
-        : state.phase === "correct" || (state.lastResult === "right" && state.phase === "revealed")
-          ? "#7dffa3"
-          : "#666666";
+      let color = "#666666";
+      if (state.phase === "wrong" || (state.lastResult === "wrong" && state.phase === "revealed")) color = "#ff6b6b";
+      else if (state.phase === "correct" || (state.lastResult === "right" && state.phase === "revealed")) color = "#7dffa3";
+      else if (state.phase === "play" && isMulti() && state.activePlayer >= 0) color = PLAYERS[state.activePlayer].fill;
+      ctx.fillStyle = color;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.font = "500 " + Math.max(12, Math.min(w, h) * 0.024) + "px system-ui, sans-serif";
@@ -567,6 +823,7 @@
     }
 
     for (let i = 0; i < state.sourceCells.length; i++) state.sourceCells[i].draw(ctx);
+    drawPads();
 
     if (state.extraText.length) {
       ctx.fillStyle = "#b0b0b0";
@@ -597,7 +854,7 @@
     } else if (e.code === "Escape") {
       e.preventDefault();
       resetGuess();
-    } else if (e.code === "Space" && state.phase !== "revealed" && state.phase !== "title") {
+    } else if (e.code === "Space" && state.phase !== "revealed" && state.phase !== "title" && state.phase !== "correct") {
       e.preventDefault();
       reveal();
     }
