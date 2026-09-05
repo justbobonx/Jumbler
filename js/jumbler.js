@@ -154,7 +154,7 @@
       cell.setLetter(ch);
       if (!ch) cell.setMode("idle");
       else if (state.phase === "correct" || state.phase === "revealed") cell.setMode("correct");
-      else if (state.phase === "wrong") cell.setMode("wrong";
+      else if (state.phase === "wrong") cell.setMode("wrong");
       else cell.setMode("selected");
     }
   }
