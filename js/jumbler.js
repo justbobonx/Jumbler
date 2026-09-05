@@ -18,7 +18,13 @@
     guessCells: [],
     extraText: [],
     extraY: 0,
+    extraSize: 16,
+    hintY: 0,
     buttons: [],
+    rights: 0,
+    wrongs: 0,
+    score: 0,
+    lastResult: "",
   };
 
   function signature(word) {
@@ -122,6 +128,14 @@
     return state.answers.filter((w) => w !== shown);
   }
 
+  function hintText() {
+    if (state.phase === "play") return "tap letters to spell";
+    if (state.phase === "wrong") return "wrong";
+    if (state.phase === "correct") return "right";
+    if (state.phase === "revealed") return state.lastResult === "wrong" ? "wrong" : state.lastResult === "right" ? "right" : "";
+    return "";
+  }
+
   function applyPlayModes() {
     const used = Object.create(null);
     for (let i = 0; i < state.picked.length; i++) used[state.picked[i]] = true;
@@ -179,13 +193,16 @@
     const showExtras = (state.phase === "correct" || state.phase === "revealed") && extrasForDisplay().length;
     const mainSize = cellSizeFor(n, maxWidth, Math.min(w, h) * 0.16);
     const mainGap = Math.max(5, Math.round(mainSize * 0.08));
-    const mainY = showExtras ? h * 0.46 : h * 0.52;
+    const mainY = showExtras ? h * 0.48 : h * 0.54;
 
     state.sourceCells = LetterCell.row(state.jumble, w / 2, mainY, mainSize, mainGap);
 
     const guessSize = cellSizeFor(n, maxWidth * 0.78, Math.min(w, h) * 0.09);
     const guessGap = Math.max(4, Math.round(guessSize * 0.08));
-    state.guessCells = LetterCell.row("", w / 2, mainY - mainSize * 0.5 - guessSize * 0.95, guessSize, guessGap, { count: n });
+    const hintSpace = Math.max(26, guessSize * 0.7);
+    const guessY = mainY - mainSize * 0.5 - hintSpace - guessSize * 0.5;
+    state.guessCells = LetterCell.row("", w / 2, guessY, guessSize, guessGap, { count: n });
+    state.hintY = (guessY + guessSize / 2 + mainY - mainSize / 2) / 2;
 
     if (showExtras) {
       const extras = extrasForDisplay();
@@ -214,7 +231,17 @@
 
   function scoreGuess() {
     const hit = state.answers.indexOf(state.guess) !== -1;
-    state.phase = hit ? "correct" : "wrong";
+    if (hit) {
+      state.phase = "correct";
+      state.lastResult = "right";
+      state.rights += 1;
+      state.score += 10 * state.guess.length;
+    } else {
+      state.phase = "wrong";
+      state.lastResult = "wrong";
+      state.wrongs += 1;
+      state.score -= 10;
+    }
     layout();
     draw();
   }
@@ -261,6 +288,7 @@
     state.phase = "play";
     state.picked = [];
     state.guess = "";
+    state.lastResult = "";
     layout();
     draw();
   }
@@ -311,6 +339,32 @@
     ctx.fillText(btn.label, btn.x + btn.w / 2, btn.y + btn.h / 2 + 1);
   }
 
+  function drawScore(w) {
+    const y = 28;
+    const fontSize = Math.max(14, Math.min(w, window.innerHeight) * 0.028);
+    ctx.font = "600 " + fontSize + "px system-ui, sans-serif";
+    ctx.textBaseline = "top";
+    const gap = Math.max(28, w * 0.06);
+    const items = [
+      { label: "RIGHT", value: String(state.rights), color: "#7dffa3" },
+      { label: "WRONG", value: String(state.wrongs), color: "#ff6b6b" },
+      { label: "SCORE", value: String(state.score), color: "#f2f2f2" },
+    ];
+    const parts = items.map((item) => item.label + "  " + item.value);
+    const widths = parts.map((p) => ctx.measureText(p).width);
+    const total = widths.reduce((a, b) => a + b, 0) + gap * (items.length - 1);
+    let x = w / 2 - total / 2;
+    for (let i = 0; i < items.length; i++) {
+      ctx.textAlign = "left";
+      ctx.fillStyle = "#777777";
+      ctx.fillText(items[i].label, x, y);
+      const labelW = ctx.measureText(items[i].label + "  ").width;
+      ctx.fillStyle = items[i].color;
+      ctx.fillText(items[i].value, x + labelW, y);
+      x += widths[i] + gap;
+    }
+  }
+
   function draw() {
     const w = window.innerWidth;
     const h = window.innerHeight;
@@ -326,20 +380,23 @@
       return;
     }
 
-    ctx.fillStyle = "#666666";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "bottom";
-    ctx.font = "500 " + Math.max(12, Math.min(w, h) * 0.024) + "px system-ui, sans-serif";
-    const caption = state.phase === "play" || state.phase === "wrong"
-      ? "tap letters to spell"
-      : state.phase === "correct"
-        ? "got it"
-        : "all matches";
-    if (state.guessCells.length) {
-      ctx.fillText(caption, w / 2, state.guessCells[0].y - 10);
-    }
+    drawScore(w);
 
     for (let i = 0; i < state.guessCells.length; i++) state.guessCells[i].draw(ctx);
+
+    const hint = hintText();
+    if (hint) {
+      ctx.fillStyle = state.phase === "wrong" || state.lastResult === "wrong" && state.phase === "revealed"
+        ? "#ff6b6b"
+        : state.phase === "correct" || state.lastResult === "right" && state.phase === "revealed"
+          ? "#7dffa3"
+          : "#666666";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = "500 " + Math.max(12, Math.min(w, h) * 0.024) + "px system-ui, sans-serif";
+      ctx.fillText(hint, w / 2, state.hintY);
+    }
+
     for (let i = 0; i < state.sourceCells.length; i++) state.sourceCells[i].draw(ctx);
 
     if (state.extraText.length) {
