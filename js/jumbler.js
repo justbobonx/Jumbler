@@ -1,5 +1,5 @@
 (() => {
-  const VERSION = window.VERSION || "0.7.1";
+  const VERSION = window.VERSION || "0.8.0";
   const canvas = document.getElementById("stage");
   const ctx = canvas.getContext("2d");
   const chrome = new PlayChrome(
@@ -87,9 +87,14 @@
       else cell.setMode("selected");
     }
   }
-  function buttonLabel(id) { return id === "reveal" ? "GIVE UP" : id.toUpperCase(); }
+  function buttonLabel(id) {
+    if (id === "reveal") return "GIVE UP";
+    if (id === "start") return "NEW GAME";
+    if (id === "continue") return "CONTINUE";
+    return id.toUpperCase();
+  }
   function placeButtons(ids, w, h) {
-    const btnW = Math.max(100, Math.min(148, w * 0.24));
+    const btnW = Math.max(100, Math.min(160, w * 0.28));
     const btnH = Math.max(36, Math.min(44, h * 0.06));
     const gap = 12;
     const total = ids.length * btnW + (ids.length - 1) * gap;
@@ -99,6 +104,10 @@
       state.buttons.push({ id: ids[i], label: buttonLabel(ids[i]), x: x, y: y, w: btnW, h: btnH });
       x += btnW + gap;
     }
+  }
+  function addTitleButton(id, w, y, btnW, btnH) {
+    state.buttons.push({ id: id, label: buttonLabel(id), x: w / 2 - btnW / 2, y: y, w: btnW, h: btnH });
+    return y + btnH + 12;
   }
   function layoutStepper(w, h, titleBottom) {
     state.stepper = [];
@@ -122,12 +131,13 @@
     const w = sizeV.w, h = sizeV.h;
     const size = cellSizeFor(7, w * 0.9, Math.min(w, h) * 0.18);
     const gap = Math.max(5, Math.round(size * 0.08));
-    const titleY = h * 0.34;
+    const titleY = h * 0.30;
     state.titleCells = LetterCell.row("JUMBLER", w / 2, titleY, size, gap, { mode: "revealed" });
-    const stepperBottom = layoutStepper(w, h, titleY + size / 2);
-    const btnW = Math.max(100, Math.min(148, w * 0.24));
+    let y = layoutStepper(w, h, titleY + size / 2) + 22;
+    const btnW = Math.max(120, Math.min(168, w * 0.32));
     const btnH = Math.max(36, Math.min(44, h * 0.06));
-    state.buttons.push({ id: "start", label: "START", x: w / 2 - btnW / 2, y: stepperBottom + 22, w: btnW, h: btnH });
+    if (GameSave.exists()) y = addTitleButton("continue", w, y, btnW, btnH);
+    addTitleButton("start", w, y, btnW, btnH);
   }
   function layout() {
     state.sourceCells = []; state.guessCells = []; state.titleCells = [];
@@ -169,9 +179,75 @@
     else if (state.phase === "revealed") placeButtons(["next"], w, h);
     applyPlayModes();
   }
+  function snapshot() {
+    return {
+      word: state.word, jumble: state.jumble, answers: state.answers.slice(),
+      phase: state.phase === "wrong" ? "buzz" : (board.buzzAnim ? "buzz" : state.phase),
+      picked: state.picked.slice(), guess: state.phase === "wrong" ? "" : state.guess,
+      rights: state.rights, wrongs: state.wrongs, score: state.score,
+      lastResult: state.lastResult, missedThisWord: state.missedThisWord,
+      playerCount: state.playerCount, activePlayer: state.phase === "wrong" ? -1 : state.activePlayer,
+      scores: board.scores.slice(), locked: board.locked.slice(),
+      timerKind: ticks.kind, timerLeft: ticks.until ? Math.max(0, ticks.until - Date.now()) : 0,
+      timerLetters: state.jumble.length,
+    };
+  }
+  function applySnapshot(data) {
+    if (!data || !data.word) return false;
+    state.word = data.word; state.jumble = data.jumble; state.answers = data.answers || bank.answersOf(data.word);
+    state.picked = data.picked || []; state.guess = data.guess || "";
+    state.rights = data.rights || 0; state.wrongs = data.wrongs || 0; state.score = data.score || 0;
+    state.lastResult = data.lastResult || ""; state.missedThisWord = !!data.missedThisWord;
+    state.playerCount = Math.max(1, Math.min(4, data.playerCount || 1));
+    state.activePlayer = data.activePlayer == null ? -1 : data.activePlayer;
+    board.count = state.playerCount;
+    board.scores = (data.scores || [0, 0, 0, 0]).slice();
+    board.locked = (data.locked || [false, false, false, false]).slice();
+    board.buzzAnim = null;
+    state.phase = data.phase || (isMulti() ? "buzz" : "play");
+    ticks.clear();
+    if (data.timerKind && data.timerLeft > 0) {
+      ticks.start(data.timerKind, data.timerLetters || state.jumble.length);
+      ticks.until = Date.now() + data.timerLeft;
+      ticks.shown = ticks.remaining();
+    }
+    return true;
+  }
+  function saveGame() {
+    if (state.phase === "title" || state.phase === "loading" || state.phase === "error" || !state.word) return;
+    GameSave.write(snapshot());
+  }
+  function applySavedPlayerCount() {
+    const data = GameSave.read();
+    if (data && data.playerCount) state.playerCount = Math.max(1, Math.min(4, data.playerCount));
+  }
   function resize() { chrome.sizeCanvas(ctx); layout(); draw(); }
-  function showTitle() { chrome.leavePlay(); state.phase = "title"; resize(); }
-  function startPlay() { board.resetScores(); chrome.enterPlay(resize).then(nextWord); }
+  function showTitle() {
+    clearLock(); ticks.clear(); board.buzzAnim = null;
+    chrome.leavePlay();
+    applySavedPlayerCount();
+    state.phase = "title";
+    resize();
+  }
+  function onLostFocus() {
+    if (state.phase === "title" || state.phase === "loading" || state.phase === "error") return;
+    saveGame();
+    showTitle();
+  }
+  function startPlay() {
+    GameSave.clear();
+    board.resetScores(); board.resetRound();
+    state.rights = 0; state.wrongs = 0; state.score = 0;
+    chrome.enterPlay(resize).then(nextWord);
+  }
+  function continuePlay() {
+    const data = GameSave.read();
+    if (!data) return startPlay();
+    chrome.enterPlay(resize).then(() => {
+      if (!applySnapshot(data)) nextWord();
+      else { layout(); draw(); }
+    });
+  }
   function changePlayers(delta) {
     const next = Math.max(1, Math.min(4, state.playerCount + delta));
     if (next === state.playerCount) return;
@@ -275,6 +351,7 @@
       if (btn.id === "reveal") reveal();
       else if (btn.id === "next") nextWord();
       else if (btn.id === "start") startPlay();
+      else if (btn.id === "continue") continuePlay();
       else if (btn.id === "reset") resetGuess();
       return;
     }
@@ -394,12 +471,21 @@
   window.addEventListener("orientationchange", function () { setTimeout(resize, 200); });
   document.addEventListener("fullscreenchange", resize);
   document.addEventListener("webkitfullscreenchange", resize);
+  window.addEventListener("pagehide", onLostFocus);
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "hidden") onLostFocus();
+  });
   canvas.addEventListener("pointerup", onTap);
   window.addEventListener("keydown", (e) => {
-    if ((e.code === "Enter" || e.code === "Space") && state.phase === "title") { e.preventDefault(); startPlay(); }
-    else if (e.code === "Enter" && (state.phase === "correct" || state.phase === "revealed")) { e.preventDefault(); nextWord(); }
-    else if (e.code === "Escape") { e.preventDefault(); resetGuess(); }
-    else if (e.code === "Space" && state.phase !== "revealed" && state.phase !== "title" && state.phase !== "correct") { e.preventDefault(); reveal(); }
+    if ((e.code === "Enter" || e.code === "Space") && state.phase === "title") {
+      e.preventDefault();
+      if (GameSave.exists()) continuePlay(); else startPlay();
+    } else if (e.code === "Enter" && (state.phase === "correct" || state.phase === "revealed")) {
+      e.preventDefault(); nextWord();
+    } else if (e.code === "Escape") { e.preventDefault(); resetGuess(); }
+    else if (e.code === "Space" && state.phase !== "revealed" && state.phase !== "title" && state.phase !== "correct") {
+      e.preventDefault(); reveal();
+    }
   });
   resize();
   requestAnimationFrame(tickFrame);
