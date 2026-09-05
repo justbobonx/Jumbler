@@ -1,5 +1,5 @@
 (() => {
-  const VERSION = window.VERSION || "0.7.0";
+  const VERSION = window.VERSION || "0.7.1";
   const canvas = document.getElementById("stage");
   const ctx = canvas.getContext("2d");
   const chrome = new PlayChrome(
@@ -38,7 +38,7 @@
     return lines;
   }
   function cellSizeFor(count, maxWidth, maxSize) {
-    const gap = Math.max(5, maxSize * 0.06);
+    const gap = Math.max(4, maxSize * 0.05);
     return Math.max(22, Math.min(maxSize, Math.floor((maxWidth - gap * (count - 1)) / count)));
   }
   function bigWord() {
@@ -120,7 +120,7 @@
   function layoutTitle() {
     const sizeV = chrome.viewSize();
     const w = sizeV.w, h = sizeV.h;
-    const size = cellSizeFor(7, w * 0.86, Math.min(w, h) * 0.16);
+    const size = cellSizeFor(7, w * 0.9, Math.min(w, h) * 0.18);
     const gap = Math.max(5, Math.round(size * 0.08));
     const titleY = h * 0.34;
     state.titleCells = LetterCell.row("JUMBLER", w / 2, titleY, size, gap, { mode: "revealed" });
@@ -137,17 +137,18 @@
     const sizeV = chrome.viewSize();
     const w = sizeV.w, h = sizeV.h, n = state.jumble.length;
     const buzzing = isMulti() && state.phase === "buzz";
-    const maxWidth = buzzing ? w * 0.62 : w * 0.86;
+    const padRoom = buzzing ? PlayerPad.sizeFor(w, h) * 2 + 20 : 32;
+    const maxWidth = Math.min(w * 0.94, Math.max(120, w - padRoom));
     const showGuess = !buzzing;
     const showExtras = (state.phase === "correct" || state.phase === "revealed") && extrasForDisplay().length;
-    const mainSize = cellSizeFor(n, maxWidth, Math.min(w, h) * (buzzing ? 0.14 : 0.16));
-    const mainGap = Math.max(5, Math.round(mainSize * 0.08));
+    const mainSize = cellSizeFor(n, maxWidth, Math.min(w, h) * 0.24);
+    const mainGap = Math.max(4, Math.round(mainSize * 0.06));
     const mainY = buzzing ? h * 0.48 : showExtras ? h * 0.46 : h * 0.52;
     state.sourceCells = LetterCell.row(bigWord(), w / 2, mainY, mainSize, mainGap);
-    ticks.letters = n;
+    if (!ticks.letters) ticks.letters = TickBar.countFor(n);
     ticks.layout(w, mainY + mainSize * 0.5 + 14);
     if (showGuess) {
-      const guessSize = cellSizeFor(n, maxWidth * 0.78, Math.min(w, h) * 0.09);
+      const guessSize = cellSizeFor(n, maxWidth * 0.72, Math.min(w, h) * 0.1);
       const guessGap = Math.max(4, Math.round(guessSize * 0.08));
       const hintSpace = Math.max(26, guessSize * 0.7);
       const guessY = mainY - mainSize * 0.5 - hintSpace - guessSize * 0.5;
