@@ -1,0 +1,9 @@
+{
+  "name": "Jumbler",
+  "short_name": "Jumbler",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#111111",
+  "theme_color": "#111111",
+  "start_url": "./"
+}

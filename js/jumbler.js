@@ -1,7 +1,10 @@
 (() => {
   const WORD_LENS = [5, 6, 7, 8];
+  const VERSION = window.VERSION || "0.5.0";
   const canvas = document.getElementById("stage");
   const ctx = canvas.getContext("2d");
+  const container = document.getElementById("game-container");
+  const gate = document.getElementById("orientGate");
 
   const state = {
     lines: [],
@@ -27,7 +30,99 @@
     score: 0,
     lastResult: "",
     missedThisWord: false,
+    playChrome: false,
+    chromeWait: null,
   };
+
+  function viewSize() {
+    return {
+      w: container.clientWidth || window.innerWidth,
+      h: container.clientHeight || window.innerHeight,
+    };
+  }
+
+  function tallViewport() {
+    return window.innerHeight > window.innerWidth;
+  }
+
+  function stageSwapped() {
+    return document.documentElement.classList.contains("stage-swap");
+  }
+
+  function applyStage() {
+    const swap = state.playChrome && tallViewport();
+    document.documentElement.classList.toggle("stage-swap", swap);
+  }
+
+  function isFullscreen() {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement);
+  }
+
+  function requestPageFullscreen() {
+    const el = document.documentElement;
+    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.webkitRequestFullScreen;
+    if (!req) return Promise.resolve();
+    try {
+      const p = req.call(el);
+      if (p && typeof p.then === "function") return p.catch(function () {});
+    } catch (err) {}
+    return Promise.resolve();
+  }
+
+  function showGate() {
+    if (gate) gate.classList.add("show");
+  }
+
+  function hideGate() {
+    if (gate) gate.classList.remove("show");
+  }
+
+  function waitChromeSettled() {
+    return new Promise(function (resolve) {
+      let settled = false;
+      const finish = function () {
+        if (settled) return;
+        settled = true;
+        document.removeEventListener("fullscreenchange", onFs);
+        document.removeEventListener("webkitfullscreenchange", onFs);
+        resolve();
+      };
+      const onFs = function () {
+        applyStage();
+        resize();
+        setTimeout(finish, 80);
+      };
+      document.addEventListener("fullscreenchange", onFs);
+      document.addEventListener("webkitfullscreenchange", onFs);
+      setTimeout(finish, 750);
+    });
+  }
+
+  function enterPlayChrome() {
+    if (state.chromeWait) return state.chromeWait;
+    state.playChrome = true;
+    state.chromeWait = runPlayChrome().then(function () {
+      state.chromeWait = null;
+    }, function () {
+      state.chromeWait = null;
+    });
+    return state.chromeWait;
+  }
+
+  function runPlayChrome() {
+    applyStage();
+    const gateNeeded = tallViewport() && !stageSwapped();
+    if (gateNeeded) showGate();
+    const fs = isFullscreen() ? Promise.resolve() : requestPageFullscreen();
+    return fs.then(function () {
+      applyStage();
+      if (gateNeeded) return waitChromeSettled();
+    }).then(function () {
+      applyStage();
+      resize();
+      hideGate();
+    });
+  }
 
   function signature(word) {
     return word.toLowerCase().split("").sort().join("");
@@ -39,11 +134,13 @@
   }
 
   function resize() {
+    applyStage();
     const dpr = Math.max(1, window.devicePixelRatio || 1);
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    canvas.width = Math.floor(w * dpr);
-    canvas.height = Math.floor(h * dpr);
+    const size = viewSize();
+    canvas.width = Math.floor(size.w * dpr);
+    canvas.height = Math.floor(size.h * dpr);
+    canvas.style.width = size.w + "px";
+    canvas.style.height = size.h + "px";
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     layout();
     draw();
@@ -196,8 +293,9 @@
   }
 
   function layoutTitle() {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
+    const sizeV = viewSize();
+    const w = sizeV.w;
+    const h = sizeV.h;
     const title = "JUMBLER";
     const size = cellSizeFor(title.length, w * 0.86, Math.min(w, h) * 0.16);
     const gap = Math.max(5, Math.round(size * 0.08));
@@ -217,8 +315,9 @@
       return;
     }
 
-    const w = window.innerWidth;
-    const h = window.innerHeight;
+    const sizeV = viewSize();
+    const w = sizeV.w;
+    const h = sizeV.h;
     const n = state.jumble.length;
     const maxWidth = w * 0.86;
     const showExtras = (state.phase === "correct" || state.phase === "revealed") && extrasForDisplay().length;
@@ -252,9 +351,14 @@
   }
 
   function showTitle() {
+    state.playChrome = false;
+    document.documentElement.classList.remove("stage-swap");
     state.phase = "title";
-    layout();
-    draw();
+    resize();
+  }
+
+  function startPlay() {
+    enterPlayChrome().then(nextWord);
   }
 
   function resetGuess() {
@@ -334,8 +438,13 @@
   }
 
   function pointFromEvent(e) {
-    const rect = canvas.getBoundingClientRect();
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    const r = canvas.getBoundingClientRect();
+    if (!stageSwapped()) {
+      return { x: e.clientX - r.left, y: e.clientY - r.top };
+    }
+    const dx = e.clientX - (r.left + r.width / 2);
+    const dy = e.clientY - (r.top + r.height / 2);
+    return { x: dy + canvas.clientWidth / 2, y: -dx + canvas.clientHeight / 2 };
   }
 
   function hitButton(p) {
@@ -352,7 +461,8 @@
     const btn = hitButton(p);
     if (btn) {
       if (btn.id === "reveal") reveal();
-      else if (btn.id === "next" || btn.id === "start") nextWord();
+      else if (btn.id === "next") nextWord();
+      else if (btn.id === "start") startPlay();
       else if (btn.id === "reset") resetGuess();
       return;
     }
@@ -386,9 +496,9 @@
     ctx.fillText(btn.label, btn.x + btn.w / 2, btn.y + btn.h / 2 + 1);
   }
 
-  function drawScore(w) {
+  function drawScore(w, h) {
     const y = 28;
-    const fontSize = Math.max(14, Math.min(w, window.innerHeight) * 0.028);
+    const fontSize = Math.max(14, Math.min(w, h) * 0.028);
     ctx.font = "600 " + fontSize + "px system-ui, sans-serif";
     ctx.textBaseline = "top";
     const gap = Math.max(28, w * 0.06);
@@ -413,8 +523,9 @@
   }
 
   function draw() {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
+    const sizeV = viewSize();
+    const w = sizeV.w;
+    const h = sizeV.h;
     ctx.fillStyle = "#111111";
     ctx.fillRect(0, 0, w, h);
 
@@ -430,10 +541,15 @@
     if (state.phase === "title") {
       for (let i = 0; i < state.titleCells.length; i++) state.titleCells[i].draw(ctx);
       for (let i = 0; i < state.buttons.length; i++) drawButton(state.buttons[i]);
+      ctx.fillStyle = "#666666";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "bottom";
+      ctx.font = "500 " + Math.max(11, Math.min(w, h) * 0.022) + "px system-ui, sans-serif";
+      ctx.fillText("v" + VERSION, w - 16, h - 14);
       return;
     }
 
-    drawScore(w);
+    drawScore(w, h);
 
     for (let i = 0; i < state.guessCells.length; i++) state.guessCells[i].draw(ctx);
 
@@ -467,11 +583,14 @@
   }
 
   window.addEventListener("resize", resize);
+  window.addEventListener("orientationchange", function () { setTimeout(resize, 200); });
+  document.addEventListener("fullscreenchange", resize);
+  document.addEventListener("webkitfullscreenchange", resize);
   canvas.addEventListener("pointerup", onTap);
   window.addEventListener("keydown", (e) => {
     if ((e.code === "Enter" || e.code === "Space") && state.phase === "title") {
       e.preventDefault();
-      nextWord();
+      startPlay();
     } else if (e.code === "Enter" && (state.phase === "correct" || state.phase === "revealed")) {
       e.preventDefault();
       nextWord();
@@ -486,7 +605,7 @@
 
   resize();
 
-  fetch("data/letters.txt")
+  fetch("data/letters.txt?v=" + encodeURIComponent(VERSION))
     .then((res) => {
       if (!res.ok) throw new Error("could not load letters.txt (" + res.status + ")");
       return res.text();

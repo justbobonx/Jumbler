@@ -2,28 +2,65 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <title>Jumbler</title>
+  <link rel="manifest" href="manifest.json">
+  <script>window.VERSION = '0.5.0';</script>
   <style>
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
     html, body {
       margin: 0;
+      width: 100%;
       height: 100%;
       background: #111;
       overflow: hidden;
       touch-action: manipulation;
-      user-select: none;
-      -webkit-user-select: none;
+    }
+    #game-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      background: #111;
+    }
+    html.stage-swap #game-container {
+      width: 100vh;
+      height: 100vw;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotate(90deg);
     }
     canvas {
       display: block;
       width: 100%;
       height: 100%;
     }
+    #orientGate {
+      position: absolute;
+      inset: 0;
+      z-index: 80;
+      background: #111;
+      display: none;
+    }
+    #orientGate.show { display: block; }
   </style>
 </head>
 <body>
-  <canvas id="stage"></canvas>
-  <script src="js/lettercell.js"></script>
-  <script src="js/jumbler.js"></script>
+  <div id="game-container">
+    <canvas id="stage"></canvas>
+    <div id="orientGate"></div>
+  </div>
+  <script>
+    ['js/lettercell.js', 'js/jumbler.js'].forEach(function (src) {
+      document.write('<script src="' + src + '?v=' + window.VERSION + '"><\/script>');
+    });
+  </script>
 </body>
 </html>
