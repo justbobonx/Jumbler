@@ -5,6 +5,7 @@ class PlayChrome {
     this.gate = gate;
     this.active = false;
     this.wait = null;
+    this.wakeLock = null;
   }
 
   viewSize() {
@@ -49,6 +50,35 @@ class PlayChrome {
     return Promise.resolve();
   }
 
+  exitFullscreen() {
+    if (!this.isFullscreen()) return;
+    const ex = document.exitFullscreen || document.webkitExitFullscreen || document.webkitCancelFullScreen;
+    if (!ex) return;
+    try {
+      const p = ex.call(document);
+      if (p && typeof p.catch === "function") p.catch(function () {});
+    } catch (err) {}
+  }
+
+  requestWakeLock() {
+    const api = navigator.wakeLock;
+    if (!api || typeof api.request !== "function") return Promise.resolve();
+    return api.request("screen").then((lock) => {
+      this.wakeLock = lock;
+      lock.addEventListener("release", () => {
+        if (this.wakeLock === lock) this.wakeLock = null;
+      });
+    }).catch(function () {});
+  }
+
+  releaseWakeLock() {
+    const lock = this.wakeLock;
+    this.wakeLock = null;
+    if (lock && typeof lock.release === "function") {
+      try { lock.release(); } catch (err) {}
+    }
+  }
+
   waitSettled(onResize) {
     return new Promise((resolve) => {
       let settled = false;
@@ -79,6 +109,8 @@ class PlayChrome {
 
   leavePlay() {
     this.active = false;
+    this.releaseWakeLock();
+    this.exitFullscreen();
     document.documentElement.classList.remove("stage-swap");
   }
 
@@ -94,6 +126,7 @@ class PlayChrome {
       this.applyStage();
       if (onResize) onResize();
       this.hideGate();
+      return this.requestWakeLock();
     });
   }
 

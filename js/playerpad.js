@@ -1,11 +1,10 @@
 class PlayerPad {
   static PLAYERS = [
-    { name: "red", fill: "#c23b3b", score: "#ffb4b4" },
-    { name: "blue", fill: "#2b6cb0", score: "#b7d4ff" },
-    { name: "yellow", fill: "#d4b22a", score: "#ffe7a3" },
-    { name: "purple", fill: "#7a3db3", score: "#e0c2ff" },
+    { name: "red", fill: "#c23b3b", lit: "#ff6b6b", score: "#ffb4b4" },
+    { name: "blue", fill: "#2b6cb0", lit: "#5aa4ff", score: "#b7d4ff" },
+    { name: "yellow", fill: "#d4b22a", lit: "#ffe25a", score: "#ffe7a3" },
+    { name: "purple", fill: "#7a3db3", lit: "#b56bff", score: "#e0c2ff" },
   ];
-  static ANIM_MS = 250;
   static HOLD_MS = 500;
   static INSET = 2;
 
@@ -17,11 +16,16 @@ class PlayerPad {
     return Math.max(92, Math.min(148, w * 0.22, h * 0.30));
   }
 
+  static heightFor(size) {
+    return Math.round(size * 0.8);
+  }
+
   static spots(count, w, h) {
     const s = PlayerPad.sizeFor(w, h);
+    const ph = PlayerPad.heightFor(s);
     const inset = PlayerPad.INSET;
     const topY = inset;
-    const botY = h - s - inset;
+    const botY = h - ph - inset;
     const leftX = inset;
     const rightX = w - s - inset;
     const midX = w / 2 - s / 2;
@@ -51,41 +55,29 @@ class PlayerPad {
     this.x = x;
     this.y = y;
     this.w = size;
-    this.h = size;
+    this.h = PlayerPad.heightFor(size);
   }
 
   contains(px, py) {
     return px >= this.x && px <= this.x + this.w && py >= this.y && py <= this.y + this.h;
   }
 
-  draw(ctx, score, locked, scale) {
+  draw(ctx, score, locked, lit) {
     const spec = PlayerPad.spec(this.index);
-    const sc = scale || 1;
-    const glowing = sc > 1;
     const cx = this.x + this.w / 2;
     const cy = this.y + this.h / 2;
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.scale(sc, sc);
-    ctx.translate(-cx, -cy);
-    const r = Math.max(18, this.w * 0.26);
-    if (glowing) {
-      ctx.shadowColor = spec.fill;
-      ctx.shadowBlur = 28 + 22 * (sc - 1);
-    }
+    const r = Math.max(16, this.h * 0.28);
     LetterCell.roundRect(ctx, this.x, this.y, this.w, this.h, r);
-    ctx.fillStyle = locked ? "#2a2a2a" : spec.fill;
+    ctx.fillStyle = locked ? "#2a2a2a" : lit ? spec.lit : spec.fill;
     ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = locked ? "#444444" : "rgba(255,255,255,0.28)";
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = locked ? "#444444" : lit ? "#ffffff" : "rgba(255,255,255,0.28)";
+    ctx.lineWidth = lit ? 3 : 1.5;
     ctx.stroke();
     ctx.fillStyle = locked ? "#666666" : spec.score;
-    ctx.font = "700 " + Math.round(this.h * 0.42) + "px system-ui, sans-serif";
+    ctx.font = "700 " + Math.round(this.h * 0.46) + "px system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(String(score), cx, cy + 1);
-    ctx.restore();
   }
 }
 
@@ -135,11 +127,8 @@ class PlayerBoard {
     this.buzzAnim = { player: index, start: Date.now() };
   }
 
-  buzzScale(index) {
-    if (!this.buzzAnim || this.buzzAnim.player !== index) return 1;
-    const t = Math.min(1, (Date.now() - this.buzzAnim.start) / PlayerPad.ANIM_MS);
-    const ease = 1 - Math.pow(1 - t, 3);
-    return 1 + 0.38 * ease;
+  isLit(index) {
+    return !!(this.buzzAnim && this.buzzAnim.player === index);
   }
 
   buzzDone() {
@@ -149,7 +138,7 @@ class PlayerBoard {
   draw(ctx) {
     for (let i = 0; i < this.pads.length; i++) {
       const pad = this.pads[i];
-      pad.draw(ctx, this.scores[pad.index], this.locked[pad.index], this.buzzScale(pad.index));
+      pad.draw(ctx, this.scores[pad.index], this.locked[pad.index], this.isLit(pad.index));
     }
   }
 }
