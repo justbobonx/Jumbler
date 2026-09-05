@@ -5,6 +5,9 @@ class PlayerPad {
     { name: "yellow", fill: "#d4b22a", score: "#ffe7a3" },
     { name: "purple", fill: "#7a3db3", score: "#e0c2ff" },
   ];
+  static ANIM_MS = 250;
+  static HOLD_MS = 500;
+  static INSET = 2;
 
   static spec(index) {
     return PlayerPad.PLAYERS[index];
@@ -16,11 +19,11 @@ class PlayerPad {
 
   static spots(count, w, h) {
     const s = PlayerPad.sizeFor(w, h);
-    const hang = Math.max(18, Math.round(s * 0.22));
-    const topY = -hang;
-    const botY = h - s + hang;
-    const leftX = -hang;
-    const rightX = w - s + hang;
+    const inset = PlayerPad.INSET;
+    const topY = inset;
+    const botY = h - s - inset;
+    const leftX = inset;
+    const rightX = w - s - inset;
     const midX = w / 2 - s / 2;
     if (count === 2) {
       return [
@@ -134,13 +137,13 @@ class PlayerBoard {
 
   buzzScale(index) {
     if (!this.buzzAnim || this.buzzAnim.player !== index) return 1;
-    const t = Math.min(1, (Date.now() - this.buzzAnim.start) / 1000);
+    const t = Math.min(1, (Date.now() - this.buzzAnim.start) / PlayerPad.ANIM_MS);
     const ease = 1 - Math.pow(1 - t, 3);
     return 1 + 0.38 * ease;
   }
 
   buzzDone() {
-    return this.buzzAnim && Date.now() - this.buzzAnim.start >= 1000;
+    return this.buzzAnim && Date.now() - this.buzzAnim.start >= PlayerPad.HOLD_MS;
   }
 
   draw(ctx) {

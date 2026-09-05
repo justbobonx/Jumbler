@@ -1,7 +1,7 @@
 class TickBar {
-  static TICK_MS = 750;
-  static LAST_MS = 1000;
-  static SHRINK_MS = 240;
+  static TICK_MS = 500;
+  static PER_LETTER = 2;
+  static SHRINK_MS = 180;
 
   constructor() {
     this.kind = "";
@@ -13,22 +13,25 @@ class TickBar {
     this.y = 0;
     this.boxW = 12;
     this.boxH = 7;
-    this.gap = 5;
+    this.gap = 4;
   }
 
   get active() {
     return !!this.until || !!this.shrink;
   }
 
+  static countFor(letters) {
+    return Math.max(2, Math.max(1, letters) * TickBar.PER_LETTER);
+  }
+
   duration(letters) {
-    const n = Math.max(1, letters);
-    return Math.max(0, n - 1) * TickBar.TICK_MS + TickBar.LAST_MS;
+    return TickBar.countFor(letters) * TickBar.TICK_MS;
   }
 
   start(kind, letters) {
     this.kind = kind;
-    this.letters = Math.max(1, letters);
-    this.total = this.duration(this.letters);
+    this.letters = TickBar.countFor(letters);
+    this.total = this.letters * TickBar.TICK_MS;
     this.until = Date.now() + this.total;
     this.shown = this.letters;
     this.shrink = null;
@@ -46,8 +49,7 @@ class TickBar {
     if (!this.until) return 0;
     const left = Math.max(0, this.until - Date.now());
     if (left <= 0) return 0;
-    if (left <= TickBar.LAST_MS) return 1;
-    return 1 + Math.ceil((left - TickBar.LAST_MS) / TickBar.TICK_MS);
+    return Math.ceil(left / TickBar.TICK_MS);
   }
 
   expired() {
@@ -64,10 +66,10 @@ class TickBar {
   }
 
   layout(w, y) {
-    const n = Math.max(1, this.letters);
-    this.gap = 5;
-    this.boxW = Math.max(10, Math.min(18, Math.floor((w * 0.42 - this.gap * (n - 1)) / n)));
-    this.boxH = Math.max(8, Math.round(this.boxW * 0.55));
+    const n = Math.max(2, this.letters);
+    this.gap = 4;
+    this.boxW = Math.max(8, Math.min(16, Math.floor((w * 0.72 - this.gap * (n - 1)) / n)));
+    this.boxH = Math.max(7, Math.round(this.boxW * 0.55));
     this.y = y;
   }
 
