@@ -25,6 +25,7 @@
     wrongs: 0,
     score: 0,
     lastResult: "",
+    missedThisWord: false,
   };
 
   function signature(word) {
@@ -128,6 +129,19 @@
     return state.answers.filter((w) => w !== shown);
   }
 
+  function bigWord() {
+    if (state.phase === "correct") return state.guess || state.word;
+    if (state.phase === "revealed") return state.word;
+    return state.jumble;
+  }
+
+  function solvedMode() {
+    if (state.phase === "correct") return "correct";
+    if (state.phase === "revealed" && state.lastResult === "right") return "correct";
+    if (state.phase === "revealed") return "selected";
+    return "";
+  }
+
   function hintText() {
     if (state.phase === "play") return "tap letters to spell";
     if (state.phase === "wrong") return "wrong";
@@ -139,10 +153,11 @@
   function applyPlayModes() {
     const used = Object.create(null);
     for (let i = 0; i < state.picked.length; i++) used[state.picked[i]] = true;
+    const done = solvedMode();
 
     for (let i = 0; i < state.sourceCells.length; i++) {
       const cell = state.sourceCells[i];
-      if (state.phase === "correct" || state.phase === "revealed") cell.setMode("correct");
+      if (done) cell.setMode(done);
       else if (state.phase === "wrong" && used[i]) cell.setMode("wrong");
       else if (used[i]) cell.setMode("selected");
       else cell.setMode("idle");
@@ -153,7 +168,7 @@
       const ch = state.guess[i] || "";
       cell.setLetter(ch);
       if (!ch) cell.setMode("idle");
-      else if (state.phase === "correct" || state.phase === "revealed") cell.setMode("correct");
+      else if (done) cell.setMode(done);
       else if (state.phase === "wrong") cell.setMode("wrong");
       else cell.setMode("selected");
     }
@@ -195,7 +210,7 @@
     const mainGap = Math.max(5, Math.round(mainSize * 0.08));
     const mainY = showExtras ? h * 0.48 : h * 0.54;
 
-    state.sourceCells = LetterCell.row(state.jumble, w / 2, mainY, mainSize, mainGap);
+    state.sourceCells = LetterCell.row(bigWord(), w / 2, mainY, mainSize, mainGap);
 
     const guessSize = cellSizeFor(n, maxWidth * 0.78, Math.min(w, h) * 0.09);
     const guessGap = Math.max(4, Math.round(guessSize * 0.08));
@@ -239,6 +254,7 @@
     } else {
       state.phase = "wrong";
       state.lastResult = "wrong";
+      state.missedThisWord = true;
       state.wrongs += 1;
       state.score -= 10;
     }
@@ -269,13 +285,13 @@
 
   function reveal() {
     if (state.phase === "loading" || state.phase === "error" || state.phase === "revealed") return;
-    if (state.phase === "play" || state.phase === "wrong") {
+    if (state.phase !== "correct" && !state.missedThisWord) {
       state.score -= 20;
       if (!state.lastResult) state.lastResult = "wrong";
     }
     state.phase = "revealed";
     state.picked = [];
-    state.guess = state.word;
+    state.guess = state.lastResult === "right" ? (state.guess || state.word) : state.word;
     layout();
     draw();
   }
@@ -290,6 +306,7 @@
     state.picked = [];
     state.guess = "";
     state.lastResult = "";
+    state.missedThisWord = false;
     layout();
     draw();
   }
