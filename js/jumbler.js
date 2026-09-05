@@ -7,6 +7,7 @@
     lines: [],
     word: "",
     jumble: "",
+    revealed: false,
     status: "loading",
     message: "loading letters…",
   };
@@ -64,7 +65,18 @@
     if (state.status !== "ready") return;
     state.word = pickWord();
     state.jumble = scramble(state.word);
+    state.revealed = false;
     draw();
+  }
+
+  function onTap() {
+    if (state.status !== "ready") return;
+    if (!state.revealed) {
+      state.revealed = true;
+      draw();
+      return;
+    }
+    nextWord();
   }
 
   function fitFont(text, maxWidth, maxSize) {
@@ -83,11 +95,22 @@
     ctx.fillStyle = "#111111";
     ctx.fillRect(0, 0, w, h);
 
-    const display = state.status === "ready" ? state.jumble : state.message;
+    let display;
+    let hint = "";
+    let color = "#f2f2f2";
+
+    if (state.status === "ready") {
+      display = state.revealed ? state.word : state.jumble;
+      hint = state.revealed ? "tap for a new word" : "tap to reveal";
+      color = state.revealed ? "#7dffa3" : "#f2f2f2";
+    } else {
+      display = state.message;
+    }
+
     const maxWidth = w * 0.86;
     const size = fitFont(display, maxWidth, Math.min(w, h) * 0.18);
 
-    ctx.fillStyle = "#f2f2f2";
+    ctx.fillStyle = color;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.font = "700 " + size + "px system-ui, sans-serif";
@@ -96,12 +119,7 @@
     ctx.fillStyle = "#888888";
     ctx.font = "500 " + Math.max(14, Math.min(w, h) * 0.028) + "px system-ui, sans-serif";
     ctx.textBaseline = "bottom";
-    const hint = state.status === "ready" ? "tap for a new word" : "";
     ctx.fillText(hint, w / 2, h - 28);
-  }
-
-  function onTap() {
-    nextWord();
   }
 
   window.addEventListener("resize", resize);
@@ -109,7 +127,7 @@
   window.addEventListener("keydown", (e) => {
     if (e.code === "Space" || e.code === "Enter") {
       e.preventDefault();
-      nextWord();
+      onTap();
     }
   });
 
