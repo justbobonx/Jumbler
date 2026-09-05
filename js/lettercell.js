@@ -10,6 +10,11 @@ class LetterCell {
       borderColor: "#d8d8d8",
       fillColor: "rgba(255,255,255,0.08)",
     },
+    revealed: {
+      letterColor: "#8ecbff",
+      borderColor: "#5a92c4",
+      fillColor: "rgba(142,203,255,0.08)",
+    },
     correct: {
       letterColor: "#7dffa3",
       borderColor: "#4d8f64",

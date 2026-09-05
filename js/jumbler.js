@@ -16,6 +16,7 @@
     guess: "",
     sourceCells: [],
     guessCells: [],
+    titleCells: [],
     extraText: [],
     extraY: 0,
     extraSize: 16,
@@ -138,7 +139,7 @@
   function solvedMode() {
     if (state.phase === "correct") return "correct";
     if (state.phase === "revealed" && state.lastResult === "right") return "correct";
-    if (state.phase === "revealed") return "selected";
+    if (state.phase === "revealed") return "revealed";
     return "";
   }
 
@@ -159,8 +160,8 @@
       const cell = state.sourceCells[i];
       if (done) cell.setMode(done);
       else if (state.phase === "wrong" && used[i]) cell.setMode("wrong");
-      else if (used[i]) cell.setMode("selected");
-      else cell.setMode("idle");
+      else if (used[i]) cell.setMode("idle");
+      else cell.setMode("selected");
     }
 
     for (let i = 0; i < state.guessCells.length; i++) {
@@ -194,12 +195,27 @@
     }
   }
 
+  function layoutTitle() {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const title = "JUMBLER";
+    const size = cellSizeFor(title.length, w * 0.86, Math.min(w, h) * 0.16);
+    const gap = Math.max(5, Math.round(size * 0.08));
+    state.titleCells = LetterCell.row(title, w / 2, h * 0.42, size, gap, { mode: "revealed" });
+    placeButtons(["start"], w, h);
+  }
+
   function layout() {
     state.sourceCells = [];
     state.guessCells = [];
+    state.titleCells = [];
     state.extraText = [];
     state.buttons = [];
     if (state.phase === "loading" || state.phase === "error") return;
+    if (state.phase === "title") {
+      layoutTitle();
+      return;
+    }
 
     const w = window.innerWidth;
     const h = window.innerHeight;
@@ -233,6 +249,12 @@
     else if (state.phase === "revealed") placeButtons(["next"], w, h);
 
     applyPlayModes();
+  }
+
+  function showTitle() {
+    state.phase = "title";
+    layout();
+    draw();
   }
 
   function resetGuess() {
@@ -284,10 +306,10 @@
   }
 
   function reveal() {
-    if (state.phase === "loading" || state.phase === "error" || state.phase === "revealed") return;
+    if (state.phase === "loading" || state.phase === "error" || state.phase === "title" || state.phase === "revealed") return;
     if (state.phase !== "correct" && !state.missedThisWord) {
       state.score -= 20;
-      if (!state.lastResult) state.lastResult = "wrong";
+      if (!state.lastResult) state.lastResult = "";
     }
     state.phase = "revealed";
     state.picked = [];
@@ -330,10 +352,11 @@
     const btn = hitButton(p);
     if (btn) {
       if (btn.id === "reveal") reveal();
-      else if (btn.id === "next") nextWord();
+      else if (btn.id === "next" || btn.id === "start") nextWord();
       else if (btn.id === "reset") resetGuess();
       return;
     }
+    if (state.phase === "title") return;
     for (let i = 0; i < state.guessCells.length; i++) {
       if (state.guessCells[i].contains(p.x, p.y)) {
         tapGuess(i);
@@ -404,6 +427,12 @@
       return;
     }
 
+    if (state.phase === "title") {
+      for (let i = 0; i < state.titleCells.length; i++) state.titleCells[i].draw(ctx);
+      for (let i = 0; i < state.buttons.length; i++) drawButton(state.buttons[i]);
+      return;
+    }
+
     drawScore(w);
 
     for (let i = 0; i < state.guessCells.length; i++) state.guessCells[i].draw(ctx);
@@ -440,13 +469,16 @@
   window.addEventListener("resize", resize);
   canvas.addEventListener("pointerup", onTap);
   window.addEventListener("keydown", (e) => {
-    if (e.code === "Enter" && (state.phase === "correct" || state.phase === "revealed")) {
+    if ((e.code === "Enter" || e.code === "Space") && state.phase === "title") {
+      e.preventDefault();
+      nextWord();
+    } else if (e.code === "Enter" && (state.phase === "correct" || state.phase === "revealed")) {
       e.preventDefault();
       nextWord();
     } else if (e.code === "Escape") {
       e.preventDefault();
       resetGuess();
-    } else if (e.code === "Space" && state.phase !== "revealed") {
+    } else if (e.code === "Space" && state.phase !== "revealed" && state.phase !== "title") {
       e.preventDefault();
       reveal();
     }
@@ -463,7 +495,7 @@
       const parsed = parseLetters(text);
       state.lines = parsed.lines;
       state.groups = parsed.groups;
-      nextWord();
+      showTitle();
     })
     .catch((err) => {
       state.phase = "error";
