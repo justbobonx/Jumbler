@@ -1,11 +1,12 @@
 (() => {
   const WORD_LENS = [5, 6, 7, 8];
-  const VERSION = window.VERSION || "0.6.0";
+  const VERSION = window.VERSION || "0.6.1";
+  const TICK_MS = 500;
   const PLAYERS = [
-    { name: "red", fill: "#c23b3b", text: "#ffffff" },
-    { name: "blue", fill: "#2b6cb0", text: "#ffffff" },
-    { name: "yellow", fill: "#d4b22a", text: "#1a1a1a" },
-    { name: "purple", fill: "#7a3db3", text: "#ffffff" },
+    { name: "red", fill: "#c23b3b", score: "#ffb4b4" },
+    { name: "blue", fill: "#2b6cb0", score: "#b7d4ff" },
+    { name: "yellow", fill: "#d4b22a", score: "#ffe7a3" },
+    { name: "purple", fill: "#7a3db3", score: "#e0c2ff" },
   ];
   const canvas = document.getElementById("stage");
   const ctx = canvas.getContext("2d");
@@ -30,6 +31,10 @@
     extraY: 0,
     extraSize: 16,
     hintY: 0,
+    tickY: 0,
+    tickW: 0,
+    tickH: 0,
+    tickGap: 0,
     buttons: [],
     pads: [],
     stepper: [],
@@ -45,6 +50,9 @@
     playerScores: [0, 0, 0, 0],
     locked: [false, false, false, false],
     activePlayer: -1,
+    timerKind: "",
+    timerUntil: 0,
+    timerTotal: 0,
   };
 
   function isMulti() {
@@ -250,6 +258,28 @@
     return n;
   }
 
+  function tickCount() {
+    return Math.max(1, state.jumble.length || 5);
+  }
+
+  function clearTimer() {
+    state.timerKind = "";
+    state.timerUntil = 0;
+    state.timerTotal = 0;
+  }
+
+  function startTimer(kind) {
+    state.timerKind = kind;
+    state.timerTotal = tickCount() * TICK_MS;
+    state.timerUntil = Date.now() + state.timerTotal;
+  }
+
+  function remainingTicks() {
+    if (!state.timerUntil) return 0;
+    const left = Math.max(0, state.timerUntil - Date.now());
+    return Math.ceil(left / TICK_MS);
+  }
+
   function bigWord() {
     if (state.phase === "correct") return state.guess || state.word;
     if (state.phase === "revealed") return state.word;
@@ -264,7 +294,7 @@
   }
 
   function hintText() {
-    if (state.phase === "buzz") return "buzz in";
+    if (state.phase === "buzz") return remainingPlayers() === 1 ? "last player · buzz in" : "buzz in";
     if (state.phase === "play") {
       if (isMulti() && state.activePlayer >= 0) return PLAYERS[state.activePlayer].name + " · tap letters to spell";
       return "tap letters to spell";
@@ -332,21 +362,26 @@
     state.pads = [];
     const n = state.playerCount;
     const s = padSize(w, h);
-    const pad = 16;
+    const inset = 16;
     const bottomClear = 72;
+    const topY = inset;
+    const botY = h - bottomClear - s;
+    const leftX = inset;
+    const rightX = w - inset - s;
+    const midX = w / 2 - s / 2;
     const spots = [];
     if (n === 2) {
-      spots.push({ x: pad, y: h / 2 - s / 2 });
-      spots.push({ x: w - pad - s, y: h / 2 - s / 2 });
+      spots.push({ x: leftX, y: botY });
+      spots.push({ x: rightX, y: botY });
     } else if (n === 3) {
-      spots.push({ x: pad, y: h / 2 - s / 2 });
-      spots.push({ x: w - pad - s, y: h / 2 - s / 2 });
-      spots.push({ x: w / 2 - s / 2, y: pad });
+      spots.push({ x: leftX, y: botY });
+      spots.push({ x: rightX, y: botY });
+      spots.push({ x: midX, y: topY });
     } else {
-      spots.push({ x: pad, y: pad });
-      spots.push({ x: w - pad - s, y: pad });
-      spots.push({ x: pad, y: h - bottomClear - s });
-      spots.push({ x: w - pad - s, y: h - bottomClear - s });
+      spots.push({ x: leftX, y: topY });
+      spots.push({ x: rightX, y: topY });
+      spots.push({ x: leftX, y: botY });
+      spots.push({ x: rightX, y: botY });
     }
     for (let i = 0; i < n; i++) {
       state.pads.push({
@@ -357,6 +392,17 @@
         h: s,
       });
     }
+  }
+
+  function layoutTicks(w, mainBottom) {
+    const n = tickCount();
+    const gap = 5;
+    const boxW = Math.max(10, Math.min(18, Math.floor((w * 0.42 - gap * (n - 1)) / n)));
+    const boxH = Math.max(8, Math.round(boxW * 0.55));
+    state.tickW = boxW;
+    state.tickH = boxH;
+    state.tickGap = gap;
+    state.tickY = mainBottom + 14;
   }
 
   function layoutStepper(w, h, titleBottom) {
@@ -424,9 +470,10 @@
     const showExtras = (state.phase === "correct" || state.phase === "revealed") && extrasForDisplay().length;
     const mainSize = cellSizeFor(n, maxWidth, Math.min(w, h) * (buzzing ? 0.14 : 0.16));
     const mainGap = Math.max(5, Math.round(mainSize * 0.08));
-    const mainY = buzzing ? h * 0.5 : showExtras ? h * 0.48 : h * 0.54;
+    const mainY = buzzing ? h * 0.48 : showExtras ? h * 0.46 : h * 0.52;
 
     state.sourceCells = LetterCell.row(bigWord(), w / 2, mainY, mainSize, mainGap);
+    layoutTicks(w, mainY + mainSize * 0.5);
 
     if (showGuess) {
       const guessSize = cellSizeFor(n, maxWidth * 0.78, Math.min(w, h) * 0.09);
@@ -444,7 +491,7 @@
       const fontSize = Math.max(16, Math.min(w, h) * 0.034);
       ctx.font = "500 " + fontSize + "px system-ui, sans-serif";
       state.extraText = wrapText(extras.join(" "), w * 0.86);
-      state.extraY = mainY + mainSize * 0.5 + fontSize * 1.4;
+      state.extraY = state.tickY + state.tickH + fontSize * 1.1;
       state.extraSize = fontSize;
     }
 
@@ -499,24 +546,43 @@
     }
   }
 
+  function maybeLastTimer() {
+    if (state.phase === "buzz" && remainingPlayers() === 1) startTimer("last");
+  }
+
   function returnToBuzz() {
     state.lockTimer = 0;
     state.picked = [];
     state.guess = "";
     state.activePlayer = -1;
+    clearTimer();
     if (remainingPlayers() <= 0) {
       state.phase = "revealed";
       state.guess = state.word;
     } else {
       state.phase = "buzz";
+      maybeLastTimer();
     }
     layout();
     draw();
   }
 
+  function forceWrong() {
+    if (!isMulti() || state.phase !== "play") return;
+    clearTimer();
+    state.phase = "wrong";
+    state.lastResult = "wrong";
+    if (state.activePlayer >= 0) state.locked[state.activePlayer] = true;
+    layout();
+    draw();
+    clearLock();
+    state.lockTimer = setTimeout(returnToBuzz, 2000);
+  }
+
   function scoreGuess() {
     const hit = state.answers.indexOf(state.guess) !== -1;
     if (hit) {
+      clearTimer();
       state.phase = "correct";
       state.lastResult = "right";
       if (isMulti() && state.activePlayer >= 0) {
@@ -530,6 +596,7 @@
       return;
     }
 
+    clearTimer();
     state.phase = "wrong";
     state.lastResult = "wrong";
     if (isMulti() && state.activePlayer >= 0) {
@@ -551,10 +618,12 @@
     if (state.phase !== "buzz") return;
     if (index < 0 || index >= state.playerCount) return;
     if (state.locked[index]) return;
+    clearTimer();
     state.activePlayer = index;
     state.picked = [];
     state.guess = "";
     state.phase = "play";
+    startTimer("guess");
     layout();
     draw();
   }
@@ -585,6 +654,7 @@
     if (state.phase === "loading" || state.phase === "error" || state.phase === "title" || state.phase === "revealed") return;
     if (state.phase === "correct" && isMulti()) return;
     clearLock();
+    clearTimer();
     if (!isMulti() && state.phase !== "correct" && !state.missedThisWord) {
       state.score -= 20;
       if (!state.lastResult) state.lastResult = "";
@@ -599,6 +669,7 @@
   function nextWord() {
     if (state.phase === "error" || !state.lines.length) return;
     clearLock();
+    clearTimer();
     state.word = pickWord();
     state.jumble = scramble(state.word);
     state.answers = answersOf(state.word);
@@ -735,18 +806,39 @@
       const p = state.pads[i];
       const spec = PLAYERS[p.i];
       const locked = state.locked[p.i];
-      const r = Math.max(12, p.w * 0.16);
+      const r = Math.max(16, p.w * 0.24);
       LetterCell.roundRect(ctx, p.x, p.y, p.w, p.h, r);
       ctx.fillStyle = locked ? "#2a2a2a" : spec.fill;
       ctx.fill();
       ctx.strokeStyle = locked ? "#444444" : "rgba(255,255,255,0.25)";
       ctx.lineWidth = 1.5;
       ctx.stroke();
-      ctx.fillStyle = locked ? "#666666" : spec.text;
+      ctx.fillStyle = locked ? "#666666" : spec.score;
       ctx.font = "700 " + Math.round(p.h * 0.42) + "px system-ui, sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(String(state.playerScores[p.i]), p.x + p.w / 2, p.y + p.h / 2 + 1);
+    }
+  }
+
+  function drawTicks(w) {
+    if (!state.timerUntil || (state.timerKind !== "guess" && state.timerKind !== "last")) return;
+    const n = tickCount();
+    const left = remainingTicks();
+    const total = n * state.tickW + (n - 1) * state.tickGap;
+    let x = w / 2 - total / 2;
+    const color = state.timerKind === "last"
+      ? "#f2f2f2"
+      : state.activePlayer >= 0 ? PLAYERS[state.activePlayer].fill : "#f2f2f2";
+    for (let i = 0; i < n; i++) {
+      const on = i < left;
+      LetterCell.roundRect(ctx, x, state.tickY, state.tickW, state.tickH, 3);
+      ctx.fillStyle = on ? color : "rgba(255,255,255,0.08)";
+      ctx.fill();
+      ctx.strokeStyle = on ? color : "#444444";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      x += state.tickW + state.tickGap;
     }
   }
 
@@ -823,6 +915,7 @@
     }
 
     for (let i = 0; i < state.sourceCells.length; i++) state.sourceCells[i].draw(ctx);
+    drawTicks(w);
     drawPads();
 
     if (state.extraText.length) {
@@ -837,6 +930,20 @@
     }
 
     for (let i = 0; i < state.buttons.length; i++) drawButton(state.buttons[i]);
+  }
+
+  function tickFrame() {
+    if (state.timerUntil) {
+      if (Date.now() >= state.timerUntil) {
+        const kind = state.timerKind;
+        clearTimer();
+        if (kind === "guess") forceWrong();
+        else if (kind === "last") reveal();
+      } else {
+        draw();
+      }
+    }
+    requestAnimationFrame(tickFrame);
   }
 
   window.addEventListener("resize", resize);
@@ -861,6 +968,7 @@
   });
 
   resize();
+  requestAnimationFrame(tickFrame);
 
   fetch("data/letters.txt?v=" + encodeURIComponent(VERSION))
     .then((res) => {
