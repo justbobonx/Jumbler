@@ -16,9 +16,9 @@
     guess: "",
     sourceCells: [],
     guessCells: [],
-    otherRows: [],
+    extraText: [],
+    extraY: 0,
     buttons: [],
-    lockTimer: 0,
   };
 
   function signature(word) {
@@ -100,6 +100,28 @@
     return Math.max(22, Math.min(maxSize, size));
   }
 
+  function wrapText(text, maxWidth) {
+    const words = text.split(" ");
+    const lines = [];
+    let current = "";
+    for (let i = 0; i < words.length; i++) {
+      const next = current ? current + "   " + words[i] : words[i];
+      if (current && ctx.measureText(next).width > maxWidth) {
+        lines.push(current);
+        current = words[i];
+      } else {
+        current = next;
+      }
+    }
+    if (current) lines.push(current);
+    return lines;
+  }
+
+  function extrasForDisplay() {
+    const shown = state.guess || state.word;
+    return state.answers.filter((w) => w !== shown);
+  }
+
   function applyPlayModes() {
     const used = Object.create(null);
     for (let i = 0; i < state.picked.length; i++) used[state.picked[i]] = true;
@@ -123,10 +145,30 @@
     }
   }
 
+  function placeButtons(ids, w, h) {
+    const btnW = Math.max(100, Math.min(148, w * 0.24));
+    const btnH = Math.max(36, Math.min(44, h * 0.06));
+    const gap = 12;
+    const total = ids.length * btnW + (ids.length - 1) * gap;
+    let x = w / 2 - total / 2;
+    const y = h - btnH - 24;
+    for (let i = 0; i < ids.length; i++) {
+      state.buttons.push({
+        id: ids[i],
+        label: ids[i].toUpperCase(),
+        x: x,
+        y: y,
+        w: btnW,
+        h: btnH,
+      });
+      x += btnW + gap;
+    }
+  }
+
   function layout() {
     state.sourceCells = [];
     state.guessCells = [];
-    state.otherRows = [];
+    state.extraText = [];
     state.buttons = [];
     if (state.phase === "loading" || state.phase === "error") return;
 
@@ -134,10 +176,10 @@
     const h = window.innerHeight;
     const n = state.jumble.length;
     const maxWidth = w * 0.86;
+    const showExtras = (state.phase === "correct" || state.phase === "revealed") && extrasForDisplay().length;
     const mainSize = cellSizeFor(n, maxWidth, Math.min(w, h) * 0.16);
     const mainGap = Math.max(5, Math.round(mainSize * 0.08));
-    const showAnswers = state.phase === "revealed";
-    const mainY = showAnswers ? h * 0.34 : h * 0.52;
+    const mainY = showExtras ? h * 0.46 : h * 0.52;
 
     state.sourceCells = LetterCell.row(state.jumble, w / 2, mainY, mainSize, mainGap);
 
@@ -145,67 +187,27 @@
     const guessGap = Math.max(4, Math.round(guessSize * 0.08));
     state.guessCells = LetterCell.row("", w / 2, mainY - mainSize * 0.5 - guessSize * 0.95, guessSize, guessGap, { count: n });
 
-    if (showAnswers) {
-      const words = state.answers;
-      const altSize = cellSizeFor(n, maxWidth * 0.72, Math.min(w, h) * 0.055);
-      const altGap = Math.max(4, Math.round(altSize * 0.08));
-      const wordGap = altSize * 0.55;
-      const rowH = altSize + 10;
-      let y = mainY + mainSize * 0.5 + altSize * 1.2;
-      const wordWidth = n * altSize + (n - 1) * altGap;
-      const rows = [];
-      let current = [];
-      let currentWidth = 0;
-
-      for (let i = 0; i < words.length; i++) {
-        const nextWidth = current.length ? currentWidth + wordGap + wordWidth : wordWidth;
-        if (current.length && nextWidth > maxWidth) {
-          rows.push(current);
-          current = [words[i]];
-          currentWidth = wordWidth;
-        } else {
-          current.push(words[i]);
-          currentWidth = nextWidth;
-        }
-      }
-      if (current.length) rows.push(current);
-
-      const altStyle = { mode: "correct", lineWidth: 1 };
-      for (let r = 0; r < rows.length; r++) {
-        const rowWords = rows[r];
-        const rowWidth = rowWords.length * wordWidth + (rowWords.length - 1) * wordGap;
-        let x = w / 2 - rowWidth / 2 + wordWidth / 2;
-        const rowCells = [];
-        for (let i = 0; i < rowWords.length; i++) {
-          rowCells.push.apply(rowCells, LetterCell.row(rowWords[i], x, y, altSize, altGap, altStyle));
-          x += wordWidth + wordGap;
-        }
-        state.otherRows.push(rowCells);
-        y += rowH;
-      }
+    if (showExtras) {
+      const extras = extrasForDisplay();
+      const fontSize = Math.max(16, Math.min(w, h) * 0.034);
+      ctx.font = "500 " + fontSize + "px system-ui, sans-serif";
+      state.extraText = wrapText(extras.join(" "), maxWidth);
+      state.extraY = mainY + mainSize * 0.5 + fontSize * 1.4;
+      state.extraSize = fontSize;
     }
 
-    const btnW = Math.max(108, Math.min(160, w * 0.28));
-    const btnH = Math.max(36, Math.min(44, h * 0.06));
-    const btnY = h - btnH - 24;
-    if (state.phase === "play" || state.phase === "wrong" || state.phase === "correct") {
-      state.buttons.push({ id: "reveal", label: "REVEAL", x: w / 2 - btnW / 2, y: btnY, w: btnW, h: btnH });
-    }
-    if (state.phase === "correct" || state.phase === "revealed") {
-      const nextX = state.phase === "correct" ? w / 2 + 10 : w / 2 - btnW / 2;
-      if (state.phase === "correct") {
-        state.buttons[0].x = w / 2 - btnW - 10;
-      }
-      state.buttons.push({ id: "next", label: "NEXT", x: nextX, y: btnY, w: btnW, h: btnH });
-    }
+    if (state.phase === "play" || state.phase === "wrong") placeButtons(["reset", "reveal"], w, h);
+    else if (state.phase === "correct") placeButtons(["reveal", "next"], w, h);
+    else if (state.phase === "revealed") placeButtons(["next"], w, h);
 
     applyPlayModes();
   }
 
   function resetGuess() {
+    if (state.phase !== "play" && state.phase !== "wrong") return;
     state.picked = [];
     state.guess = "";
-    if (state.phase === "wrong") state.phase = "play";
+    state.phase = "play";
     applyPlayModes();
     draw();
   }
@@ -213,27 +215,26 @@
   function scoreGuess() {
     const hit = state.answers.indexOf(state.guess) !== -1;
     state.phase = hit ? "correct" : "wrong";
-    applyPlayModes();
     layout();
     draw();
-    if (!hit) {
-      clearTimeout(state.lockTimer);
-      state.lockTimer = setTimeout(resetGuess, 650);
-    }
   }
 
   function tapSource(index) {
-    if (state.phase !== "play") return;
+    if (state.phase !== "play" && state.phase !== "wrong") return;
+
     const already = state.picked.indexOf(index);
     if (already !== -1) {
       if (already === state.picked.length - 1) {
         state.picked.pop();
         state.guess = state.guess.slice(0, -1);
+        if (state.phase === "wrong") state.phase = "play";
         applyPlayModes();
         draw();
       }
       return;
     }
+
+    if (state.phase === "wrong") return;
     if (state.guess.length >= state.jumble.length) return;
     state.picked.push(index);
     state.guess += state.sourceCells[index].letter;
@@ -244,7 +245,6 @@
 
   function reveal() {
     if (state.phase === "loading" || state.phase === "error" || state.phase === "revealed") return;
-    clearTimeout(state.lockTimer);
     state.phase = "revealed";
     state.picked = [];
     state.guess = state.word;
@@ -254,7 +254,6 @@
 
   function nextWord() {
     if (state.phase === "error" || !state.lines.length) return;
-    clearTimeout(state.lockTimer);
     state.word = pickWord();
     state.jumble = scramble(state.word);
     state.answers = answersOf(state.word);
@@ -286,9 +285,9 @@
     if (btn) {
       if (btn.id === "reveal") reveal();
       else if (btn.id === "next") nextWord();
+      else if (btn.id === "reset") resetGuess();
       return;
     }
-    if (state.phase !== "play") return;
     for (let i = 0; i < state.sourceCells.length; i++) {
       if (state.sourceCells[i].contains(p.x, p.y)) {
         tapSource(i);
@@ -342,10 +341,18 @@
 
     for (let i = 0; i < state.guessCells.length; i++) state.guessCells[i].draw(ctx);
     for (let i = 0; i < state.sourceCells.length; i++) state.sourceCells[i].draw(ctx);
-    for (let r = 0; r < state.otherRows.length; r++) {
-      const row = state.otherRows[r];
-      for (let i = 0; i < row.length; i++) row[i].draw(ctx);
+
+    if (state.extraText.length) {
+      ctx.fillStyle = "#b0b0b0";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      ctx.font = "500 " + state.extraSize + "px system-ui, sans-serif";
+      const lineH = state.extraSize * 1.35;
+      for (let i = 0; i < state.extraText.length; i++) {
+        ctx.fillText(state.extraText[i], w / 2, state.extraY + i * lineH);
+      }
     }
+
     for (let i = 0; i < state.buttons.length; i++) drawButton(state.buttons[i]);
   }
 
@@ -355,6 +362,9 @@
     if (e.code === "Enter" && (state.phase === "correct" || state.phase === "revealed")) {
       e.preventDefault();
       nextWord();
+    } else if (e.code === "Escape") {
+      e.preventDefault();
+      resetGuess();
     } else if (e.code === "Space" && state.phase !== "revealed") {
       e.preventDefault();
       reveal();
