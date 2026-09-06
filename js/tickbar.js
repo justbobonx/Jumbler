@@ -1,6 +1,6 @@
 class TickBar {
-  static TICK_MS = 500;
-  static PER_LETTER = 2;
+  static TICK_MS = 335;
+  static PER_LETTER = 3;
   static SHRINK_MS = 180;
 
   constructor() {
@@ -20,17 +20,13 @@ class TickBar {
     return !!this.until || !!this.shrink;
   }
 
-  static countFor(letters) {
-    return Math.max(2, Math.max(1, letters) * TickBar.PER_LETTER);
-  }
-
   duration(letters) {
-    return TickBar.countFor(letters) * TickBar.TICK_MS;
+    return letters * TickBar.TICK_MS;
   }
 
   start(kind, letters) {
     this.kind = kind;
-    this.letters = TickBar.countFor(letters);
+    this.letters = letters;
     this.total = this.letters * TickBar.TICK_MS;
     this.until = Date.now() + this.total;
     this.shown = this.letters;
@@ -68,8 +64,8 @@ class TickBar {
   layout(w, y) {
     const n = Math.max(2, this.letters);
     this.gap = 4;
-    this.boxW = Math.max(8, Math.min(16, Math.floor((w * 0.72 - this.gap * (n - 1)) / n)));
-    this.boxH = Math.max(7, Math.round(this.boxW * 0.55));
+    this.boxW = Math.max(8, Math.min(16, Math.floor((w * 0.4 - this.gap * (n - 1)) / n)));
+    this.boxH = Math.max(7, Math.round(this.boxW * 0.7));
     this.y = y;
   }
 

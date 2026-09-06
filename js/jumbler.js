@@ -155,7 +155,7 @@
     const mainGap = Math.max(4, Math.round(mainSize * 0.06));
     const mainY = buzzing ? h * 0.48 : showExtras ? h * 0.46 : h * 0.52;
     state.sourceCells = LetterCell.row(bigWord(), w / 2, mainY, mainSize, mainGap);
-    if (!ticks.letters) ticks.letters = TickBar.countFor(n);
+    if (!ticks.letters) ticks.letters = n;
     ticks.layout(w, mainY + mainSize * 0.5 + 14);
     if (showGuess) {
       const guessSize = cellSizeFor(n, maxWidth * 0.72, Math.min(w, h) * 0.1);
@@ -263,7 +263,7 @@
     state.lockTimer = 0; state.picked = []; state.guess = ""; state.activePlayer = -1;
     board.buzzAnim = null; ticks.clear();
     if (board.remaining() <= 0) { state.phase = "revealed"; state.guess = state.word; }
-    else { state.phase = "buzz"; if (board.remaining() === 1) ticks.start("last", state.jumble.length); }
+    else { state.phase = "buzz"; if (board.remaining() < state.playerCount ) ticks.start("last", state.jumble.length*board.remaining()); }
     layout(); draw();
   }
   function markWrong() {
@@ -287,7 +287,7 @@
   }
   function finishBuzz(index) {
     board.buzzAnim = null; state.activePlayer = index; state.picked = []; state.guess = "";
-    state.phase = "play"; ticks.start("guess", state.jumble.length); layout(); draw();
+    state.phase = "play"; ticks.start("guess", state.jumble.length*2); layout(); draw();
   }
   function buzzIn(index) {
     if (state.phase !== "buzz" || board.buzzAnim) return;
