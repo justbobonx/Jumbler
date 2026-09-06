@@ -1,6 +1,6 @@
 class PlayerPad {
   static PLAYERS = [
-    { name: "red", fill: "#c23b3b", lit: "#ff6b6b", score: "#ffb4b4" },
+    { name: "orange", fill: "#d25a16", lit: "#ff8c3a", score: "#ffc8a0" },
     { name: "blue", fill: "#2b6cb0", lit: "#5aa4ff", score: "#b7d4ff" },
     { name: "yellow", fill: "#d4b22a", lit: "#ffe25a", score: "#ffe7a3" },
     { name: "purple", fill: "#7a3db3", lit: "#b56bff", score: "#e0c2ff" },
@@ -39,23 +39,24 @@ class PlayerPad {
       return [
         { x: leftX, y: botY },
         { x: rightX, y: botY },
-        { x: midX, y: topY },
+        { x: midX, y: topY, flip: true },
       ];
     }
     return [
       { x: leftX, y: botY },
       { x: rightX, y: botY },
-      { x: leftX, y: topY },
-      { x: rightX, y: topY },
+      { x: leftX, y: topY, flip: true },
+      { x: rightX, y: topY, flip: true },
     ];
   }
 
-  constructor(index, x, y, size) {
+  constructor(index, x, y, size, flip) {
     this.index = index;
     this.x = x;
     this.y = y;
     this.w = size;
     this.h = PlayerPad.heightFor(size);
+    this.flip = !!flip;
   }
 
   contains(px, py) {
@@ -77,7 +78,15 @@ class PlayerPad {
     ctx.font = "700 " + Math.round(this.h * 0.46) + "px system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(String(score), cx, cy + 1);
+    if (this.flip) {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(Math.PI);
+      ctx.fillText(String(score), 0, 1);
+      ctx.restore();
+    } else {
+      ctx.fillText(String(score), cx, cy + 1);
+    }
   }
 }
 
@@ -112,7 +121,7 @@ class PlayerBoard {
     const s = PlayerPad.sizeFor(w, h);
     const spots = PlayerPad.spots(count, w, h);
     for (let i = 0; i < count; i++) {
-      this.pads.push(new PlayerPad(i, spots[i].x, spots[i].y, s));
+      this.pads.push(new PlayerPad(i, spots[i].x, spots[i].y, s, spots[i].flip));
     }
   }
 
