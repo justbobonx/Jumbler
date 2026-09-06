@@ -1,5 +1,5 @@
 (() => {
-  const VERSION = window.VERSION || "0.8.1";
+  const VERSION = window.VERSION || "0.8.2";
   const canvas = document.getElementById("stage");
   const ctx = canvas.getContext("2d");
   const chrome = new PlayChrome(
@@ -74,7 +74,7 @@
       const cell = state.sourceCells[i];
       if (done) cell.setMode(done);
       else if (state.phase === "wrong" && used[i]) cell.setMode("wrong");
-      else if (used[i]) cell.setMode("idle");
+      else if (used[i]) cell.setMode("used");
       else cell.setMode("selected");
     }
     for (let i = 0; i < state.guessCells.length; i++) {
@@ -299,8 +299,17 @@
     ticks.clear(); board.startBuzz(index); draw();
   }
   function tapSource(index) {
+    if (state.phase !== "play" && state.phase !== "wrong") return;
+    if (isMulti() && state.phase === "wrong") return;
+    const at = state.picked.indexOf(index);
+    if (at !== -1) {
+      state.picked.splice(at, 1);
+      state.guess = state.guess.slice(0, at) + state.guess.slice(at + 1);
+      if (state.phase === "wrong") state.phase = "play";
+      applyPlayModes(); draw();
+      return;
+    }
     if (state.phase !== "play") return;
-    if (state.picked.indexOf(index) !== -1) return;
     if (state.guess.length >= state.jumble.length) return;
     state.picked.push(index); state.guess += state.sourceCells[index].letter;
     applyPlayModes(); draw();
@@ -485,7 +494,8 @@
       if (GameSave.exists()) continuePlay(); else startPlay();
     } else if (e.code === "Enter" && (state.phase === "correct" || state.phase === "revealed")) {
       e.preventDefault(); nextWord();
-    } else if (e.code === "Escape") { e.preventDefault(); resetGuess(); }
+    } else if (e.code === "Escape") { e.preventDefault(); resetGuess();
+    }
     else if (e.code === "Space" && state.phase !== "revealed" && state.phase !== "title" && state.phase !== "correct") {
       e.preventDefault(); reveal();
     }
