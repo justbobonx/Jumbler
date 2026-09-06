@@ -5,6 +5,11 @@ class LetterCell {
       borderColor: "#6a6a6a",
       fillColor: "rgba(255,255,255,0.03)",
     },
+    used: {
+      letterColor: "#8a8a8a",
+      borderColor: "#3f3f3f",
+      fillColor: "rgba(255,255,255,0.03)",
+    },
     selected: {
       letterColor: "#ffffff",
       borderColor: "#d8d8d8",
