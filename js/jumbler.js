@@ -1,5 +1,5 @@
 (() => {
-  const VERSION = window.VERSION || "0.8.0";
+  const VERSION = window.VERSION || "0.8.1";
   const canvas = document.getElementById("stage");
   const ctx = canvas.getContext("2d");
   const chrome = new PlayChrome(
@@ -188,8 +188,6 @@
       lastResult: state.lastResult, missedThisWord: state.missedThisWord,
       playerCount: state.playerCount, activePlayer: state.phase === "wrong" ? -1 : state.activePlayer,
       scores: board.scores.slice(), locked: board.locked.slice(),
-      timerKind: ticks.kind, timerLeft: ticks.until ? Math.max(0, ticks.until - Date.now()) : 0,
-      timerLetters: state.jumble.length,
     };
   }
   function applySnapshot(data) {
@@ -205,12 +203,7 @@
     board.locked = (data.locked || [false, false, false, false]).slice();
     board.buzzAnim = null;
     state.phase = data.phase || (isMulti() ? "buzz" : "play");
-    ticks.clear();
-    if (data.timerKind && data.timerLeft > 0) {
-      ticks.start(data.timerKind, data.timerLetters || state.jumble.length);
-      ticks.until = Date.now() + data.timerLeft;
-      ticks.shown = ticks.remaining();
-    }
+    startTicksForPhase();
     return true;
   }
   function saveGame() {
@@ -248,10 +241,21 @@
       else { layout(); draw(); }
     });
   }
+  function startTicksForPhase() {
+    ticks.clear();
+    if (!isMulti()) return;
+    if (state.phase === "play" && state.activePlayer >= 0) {
+      ticks.start("guess", state.jumble.length * 2);
+    } else if (state.phase === "buzz" && board.remaining() > 0 && board.remaining() < state.playerCount) {
+      ticks.start("last", state.jumble.length * board.remaining());
+    }
+  }
   function changePlayers(delta) {
     const next = Math.max(1, Math.min(4, state.playerCount + delta));
     if (next === state.playerCount) return;
-    state.playerCount = next; layout(); draw();
+    state.playerCount = next;
+    GameSave.clear();
+    layout(); draw();
   }
   function resetGuess() {
     if (state.phase !== "play" && state.phase !== "wrong") return;
@@ -458,7 +462,6 @@
   function tickFrame() {
     if (board.buzzDone()) finishBuzz(board.buzzAnim.player);
     if (ticks.until) {
-      ticks.sync();
       if (ticks.expired()) {
         const kind = ticks.kind; ticks.clear();
         if (kind === "guess") forceWrong(); else if (kind === "last") reveal();
