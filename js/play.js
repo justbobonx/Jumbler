@@ -50,7 +50,6 @@ class Play {
 
   hintText() {
     if (this.phase === "buzz") {
-      if (this.board.buzzAnim) return PlayerPad.spec(this.board.buzzAnim.player).name;
       return this.board.remaining() === 1 ? "last player \u00b7 buzz in" : "buzz in";
     }
     if (this.phase === "play") {
@@ -74,7 +73,7 @@ class Play {
   snapshot() {
     return {
       word: this.word, jumble: this.jumble, answers: this.answers.slice(),
-      phase: this.phase === "wrong" ? "buzz" : (this.board.buzzAnim ? "buzz" : this.phase),
+      phase: this.phase === "wrong" ? "buzz" : this.phase,
       picked: this.picked.slice(), guess: this.phase === "wrong" ? "" : this.guess,
       rights: this.rights, wrongs: this.wrongs, score: this.score,
       lastResult: this.lastResult, missedThisWord: this.missedThisWord,
@@ -253,10 +252,10 @@ class Play {
   }
 
   buzzIn(index) {
-    if (this.phase !== "buzz" || this.board.buzzAnim) return;
+    if (this.phase !== "buzz") return;
     if (index < 0 || index >= this.playerCount || this.board.locked[index]) return;
     this.ticks.clear();
-    this.board.startBuzz(index);
+    this.finishBuzz(index);
   }
 
   tapSource(index) {
@@ -288,7 +287,6 @@ class Play {
   reveal() {
     if (this.phase === "loading" || this.phase === "error" || this.phase === "title" || this.phase === "revealed") return;
     if (this.phase === "correct" && this.isMulti()) return;
-    if (this.board.buzzAnim) return;
     this.clearLock();
     this.ticks.clear();
     if (!this.isMulti() && this.phase !== "correct") {
@@ -337,7 +335,6 @@ class Play {
       return;
     }
     if (this.phase === "buzz") {
-      if (this.board.buzzAnim) return;
       const pad = this.board.hit(p);
       if (pad) this.buzzIn(pad.index);
       return;
@@ -372,7 +369,6 @@ class Play {
   }
 
   tick() {
-    if (this.board.buzzDone()) this.finishBuzz(this.board.buzzAnim.player);
     if (this.ticks.until && this.ticks.expired()) {
       const kind = this.ticks.kind;
       this.ticks.clear();
@@ -382,6 +378,6 @@ class Play {
   }
 
   needsFrame() {
-    return this.ticks.active || !!this.board.buzzAnim;
+    return this.ticks.active;
   }
 }
