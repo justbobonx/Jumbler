@@ -120,14 +120,13 @@ class PlayView {
     const sizeV = this.chrome.viewSize();
     const w = sizeV.w, h = sizeV.h, n = play.jumble.length;
     const buzzing = play.isMulti() && play.phase === "buzz";
-    const padRoom = buzzing ? PlayerPad.sizeFor(w, h) * 2 + 20 : 32;
-    const maxWidth = Math.min(w * 0.94, Math.max(120, w - padRoom));
-    const showGuess = !buzzing;
+    const maxWidth = Math.min(w * 0.94, Math.max(120, w - 32));
     const extras = play.extrasForDisplay();
     const showExtras = (play.phase === "correct" || play.phase === "revealed") && extras.length;
+    const showGuess = !buzzing;
     const mainSize = LetterCell.sizeFor(n, maxWidth, Math.min(w, h) * 0.24);
     const mainGap = LetterCell.gapFor(mainSize, 0.06);
-    const mainY = buzzing ? h * 0.48 : showExtras ? h * 0.46 : h * 0.52;
+    const mainY = showExtras ? h * 0.46 : h * 0.52;
     this.sourceCells = LetterCell.row(play.bigWord(), w / 2, mainY, mainSize, mainGap);
     this.ticks.placeUnderWord(w, n, mainY + mainSize * 0.5);
     if (showGuess) {
