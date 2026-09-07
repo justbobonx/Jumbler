@@ -132,7 +132,8 @@ class PlayView {
     if (showGuess) {
       const guessSize = LetterCell.sizeFor(n, maxWidth * 0.72, Math.min(w, h) * 0.1);
       const guessGap = LetterCell.gapFor(guessSize, 0.08);
-      const hintSpace = Math.max(26, guessSize * 0.7);
+      //const hintSpace = Math.max(26, guessSize * 0.7);
+      const hintSpace = 30; //no hint but stil small gap
       const guessY = mainY - mainSize * 0.5 - hintSpace - guessSize * 0.5;
       this.guessCells = LetterCell.row("", w / 2, guessY, guessSize, guessGap, { count: n });
       this.hintY = (guessY + guessSize / 2 + mainY - mainSize / 2) / 2;
@@ -276,14 +277,14 @@ class PlayView {
     }
     this.drawScore(ctx, play, w, h);
     LetterCell.paint(ctx, this.guessCells);
-    const hint = play.hintText();
-    if (hint) {
-      ctx.fillStyle = this.hintColor(play);
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.font = "500 " + Math.max(12, Math.min(w, h) * 0.024) + "px system-ui, sans-serif";
-      ctx.fillText(hint, w / 2, this.hintY);
-    }
+    // const hint = play.hintText();
+    // if (hint) {
+      // ctx.fillStyle = this.hintColor(play);
+      // ctx.textAlign = "center";
+      // ctx.textBaseline = "middle";
+      // ctx.font = "500 " + Math.max(12, Math.min(w, h) * 0.024) + "px system-ui, sans-serif";
+      // ctx.fillText(hint, w / 2, this.hintY);
+    // }
     LetterCell.paint(ctx, this.sourceCells);
     const playerColor = play.activePlayer >= 0 ? PlayerPad.spec(play.activePlayer).fill : "";
     this.ticks.draw(ctx, w, this.ticks.colorFor(playerColor));
