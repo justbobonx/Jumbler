@@ -24,14 +24,12 @@ class PlayerPad {
     const s = PlayerPad.sizeFor(w, h);
     const ph = PlayerPad.heightFor(s);
     const inset = PlayerPad.INSET;
+    const topY = inset;
     const botY = h - ph - inset;
     const leftX = inset;
     const rightX = w - s - inset;
     const sideLeftX = inset;
     const sideRightX = w - ph - inset;
-    const botTop = botY;
-    let sideY = Math.round((h - s) / 2);
-    if (sideY + s > botTop - 8) sideY = Math.max(inset, botTop - 8 - s);
     if (count === 2) {
       return [
         { x: leftX, y: botY, rot: 0 },
@@ -42,14 +40,14 @@ class PlayerPad {
       return [
         { x: leftX, y: botY, rot: 0 },
         { x: rightX, y: botY, rot: 0 },
-        { x: sideLeftX, y: sideY, rot: 270 },
+        { x: sideLeftX, y: topY, rot: 270 },
       ];
     }
     return [
       { x: leftX, y: botY, rot: 0 },
       { x: rightX, y: botY, rot: 0 },
-      { x: sideLeftX, y: sideY, rot: 270 },
-      { x: sideRightX, y: sideY, rot: 90 },
+      { x: sideLeftX, y: topY, rot: 270 },
+      { x: sideRightX, y: topY, rot: 90 },
     ];
   }
 
