@@ -149,7 +149,7 @@ class LetterCell {
     for (let i = 0; i < picked.length; i++) used[picked[i]] = true;
     for (let i = 0; i < cells.length; i++) {
       if (done) cells[i].setMode(done);
-      else if (phase === "wrong" && used[i]) cells[i].setMode("wrong");
+      else if (phase === "wrong") cells[i].setMode("wrong");
       else if (used[i]) cells[i].setMode("used");
       else cells[i].setMode("selected");
     }
@@ -159,9 +159,9 @@ class LetterCell {
     for (let i = 0; i < cells.length; i++) {
       const ch = guess[i] || "";
       cells[i].setLetter(ch);
-      if (!ch) cells[i].setMode("idle");
-      else if (done) cells[i].setMode(done);
+      if (done) cells[i].setMode(done);
       else if (phase === "wrong") cells[i].setMode("wrong");
+      else if (!ch) cells[i].setMode("idle");
       else cells[i].setMode("selected");
     }
   }
