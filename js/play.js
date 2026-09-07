@@ -287,6 +287,11 @@ class Play {
   reveal() {
     if (this.phase === "loading" || this.phase === "error" || this.phase === "title" || this.phase === "revealed") return;
     if (this.phase === "correct" && this.isMulti()) return;
+    if (this.isMulti() && this.activePlayer >= 0 && (this.phase === "play" || this.phase === "wrong")) {
+      this.ticks.clear();
+      this.markWrong();
+      return;
+    }
     this.clearLock();
     this.ticks.clear();
     if (!this.isMulti() && this.phase !== "correct") {
