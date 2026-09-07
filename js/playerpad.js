@@ -24,39 +24,49 @@ class PlayerPad {
     const s = PlayerPad.sizeFor(w, h);
     const ph = PlayerPad.heightFor(s);
     const inset = PlayerPad.INSET;
-    const topY = inset;
     const botY = h - ph - inset;
     const leftX = inset;
     const rightX = w - s - inset;
-    const midX = w / 2 - s / 2;
+    const sideLeftX = inset;
+    const sideRightX = w - ph - inset;
+    const botTop = botY;
+    let sideY = Math.round((h - s) / 2);
+    if (sideY + s > botTop - 8) sideY = Math.max(inset, botTop - 8 - s);
     if (count === 2) {
       return [
-        { x: leftX, y: botY },
-        { x: rightX, y: botY },
+        { x: leftX, y: botY, rot: 0 },
+        { x: rightX, y: botY, rot: 0 },
       ];
     }
     if (count === 3) {
       return [
-        { x: leftX, y: botY },
-        { x: rightX, y: botY },
-        { x: midX, y: topY, flip: true },
+        { x: leftX, y: botY, rot: 0 },
+        { x: rightX, y: botY, rot: 0 },
+        { x: sideLeftX, y: sideY, rot: 270 },
       ];
     }
     return [
-      { x: leftX, y: botY },
-      { x: rightX, y: botY },
-      { x: leftX, y: topY, flip: true },
-      { x: rightX, y: topY, flip: true },
+      { x: leftX, y: botY, rot: 0 },
+      { x: rightX, y: botY, rot: 0 },
+      { x: sideLeftX, y: sideY, rot: 270 },
+      { x: sideRightX, y: sideY, rot: 90 },
     ];
   }
 
-  constructor(index, x, y, size, flip) {
+  constructor(index, x, y, size, rot) {
     this.index = index;
+    this.rot = rot || 0;
+    this.padW = size;
+    this.padH = PlayerPad.heightFor(size);
     this.x = x;
     this.y = y;
-    this.w = size;
-    this.h = PlayerPad.heightFor(size);
-    this.flip = !!flip;
+    if (this.rot === 90 || this.rot === 270) {
+      this.w = this.padH;
+      this.h = this.padW;
+    } else {
+      this.w = this.padW;
+      this.h = this.padH;
+    }
   }
 
   contains(px, py) {
@@ -67,26 +77,24 @@ class PlayerPad {
     const spec = PlayerPad.spec(this.index);
     const cx = this.x + this.w / 2;
     const cy = this.y + this.h / 2;
-    const r = Math.max(16, this.h * 0.28);
-    LetterCell.roundRect(ctx, this.x, this.y, this.w, this.h, r);
+    const pw = this.padW;
+    const ph = this.padH;
+    const r = Math.max(16, ph * 0.28);
+    ctx.save();
+    ctx.translate(cx, cy);
+    if (this.rot) ctx.rotate(this.rot * Math.PI / 180);
+    LetterCell.roundRect(ctx, -pw / 2, -ph / 2, pw, ph, r);
     ctx.fillStyle = locked ? "#2a2a2a" : lit ? spec.lit : spec.fill;
     ctx.fill();
     ctx.strokeStyle = locked ? "#444444" : lit ? "#ffffff" : "rgba(255,255,255,0.28)";
     ctx.lineWidth = lit ? 3 : 1.5;
     ctx.stroke();
     ctx.fillStyle = locked ? "#666666" : spec.score;
-    ctx.font = "700 " + Math.round(this.h * 0.46) + "px system-ui, sans-serif";
+    ctx.font = "700 " + Math.round(ph * 0.46) + "px system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    if (this.flip) {
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(Math.PI);
-      ctx.fillText(String(score), 0, 1);
-      ctx.restore();
-    } else {
-      ctx.fillText(String(score), cx, cy + 1);
-    }
+    ctx.fillText(String(score), 0, 1);
+    ctx.restore();
   }
 }
 
@@ -121,7 +129,7 @@ class PlayerBoard {
     const s = PlayerPad.sizeFor(w, h);
     const spots = PlayerPad.spots(count, w, h);
     for (let i = 0; i < count; i++) {
-      this.pads.push(new PlayerPad(i, spots[i].x, spots[i].y, s, spots[i].flip));
+      this.pads.push(new PlayerPad(i, spots[i].x, spots[i].y, s, spots[i].rot));
     }
   }
 
