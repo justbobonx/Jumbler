@@ -4,6 +4,7 @@ class TickBar {
   constructor() {
     this.kind = "";
     this.until = 0;
+    this.holdUntil = 0;
     this.total = 0;
     this.letters = 0;
     this.y = 0;
@@ -20,7 +21,8 @@ class TickBar {
     this.kind = kind;
     this.letters = ticks;
     this.total = this.letters * TickBar.TICK_MS;
-    this.until = Date.now() + this.total;
+    this.holdUntil = Date.now() + TickBar.TICK_MS;
+    this.until = this.holdUntil + this.total;
   }
 
   startGuess(wordLen) {
@@ -34,11 +36,13 @@ class TickBar {
   clear() {
     this.kind = "";
     this.until = 0;
+    this.holdUntil = 0;
     this.total = 0;
   }
 
   remaining() {
     if (!this.until) return 0;
+    if (this.holdUntil && Date.now() < this.holdUntil) return this.letters;
     const left = Math.max(0, this.until - Date.now());
     if (left <= 0) return 0;
     return Math.ceil(left / TickBar.TICK_MS);
