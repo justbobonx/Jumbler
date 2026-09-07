@@ -16,11 +16,19 @@ class TickBar {
     return !!this.until;
   }
 
-  start(kind, letters) {
+  start(kind, ticks) {
     this.kind = kind;
-    this.letters = letters;
+    this.letters = ticks;
     this.total = this.letters * TickBar.TICK_MS;
     this.until = Date.now() + this.total;
+  }
+
+  startGuess(wordLen) {
+    this.start("guess", wordLen * 2);
+  }
+
+  startLast(wordLen, remaining) {
+    this.start("last", wordLen * remaining);
   }
 
   clear() {
@@ -48,17 +56,28 @@ class TickBar {
     this.y = y;
   }
 
+  placeUnderWord(w, wordLen, wordBottomY) {
+    if (!this.letters) this.letters = wordLen;
+    this.layout(w, wordBottomY + 14);
+  }
+
+  colorFor(playerColor) {
+    if (this.kind === "last") return "#f2f2f2";
+    return playerColor || "#f2f2f2";
+  }
+
   draw(ctx, w, color) {
     if (!this.until) return;
     const n = this.remaining();
     if (n <= 0) return;
+    const fill = color || this.colorFor();
     const total = n * this.boxW + (n - 1) * this.gap;
     let x = w / 2 - total / 2;
     for (let i = 0; i < n; i++) {
       LetterCell.roundRect(ctx, x, this.y, this.boxW, this.boxH, 3);
-      ctx.fillStyle = color;
+      ctx.fillStyle = fill;
       ctx.fill();
-      ctx.strokeStyle = color;
+      ctx.strokeStyle = fill;
       ctx.lineWidth = 1;
       ctx.stroke();
       x += this.boxW + this.gap;

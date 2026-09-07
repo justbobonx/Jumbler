@@ -87,9 +87,7 @@ class LetterCell {
     ctx.strokeStyle = this.borderColor;
     ctx.lineWidth = this.lineWidth;
     ctx.stroke();
-
     if (!this.letter) return;
-
     const fontSize = Math.floor(this.size * 0.9);
     ctx.fillStyle = this.letterColor;
     ctx.font = this.fontWeight + " " + fontSize + "px " + this.fontFamily;
@@ -112,6 +110,15 @@ class LetterCell {
     ctx.closePath();
   }
 
+  static sizeFor(count, maxWidth, maxSize) {
+    const gap = Math.max(4, maxSize * 0.05);
+    return Math.max(22, Math.min(maxSize, Math.floor((maxWidth - gap * (count - 1)) / count)));
+  }
+
+  static gapFor(size, ratio) {
+    return Math.max(4, Math.round(size * (ratio == null ? 0.06 : ratio)));
+  }
+
   static row(word, centerX, centerY, size, gap, options) {
     const letters = String(word).split("");
     const n = Math.max(letters.length, options && options.count ? options.count : 0);
@@ -124,5 +131,38 @@ class LetterCell {
       cells.push(new LetterCell(letters[i] || "", x0 + i * (size + gap), y0, size, options));
     }
     return cells;
+  }
+
+  static paint(ctx, cells) {
+    for (let i = 0; i < cells.length; i++) cells[i].draw(ctx);
+  }
+
+  static hitIndex(cells, p) {
+    for (let i = 0; i < cells.length; i++) {
+      if (cells[i].contains(p.x, p.y)) return i;
+    }
+    return -1;
+  }
+
+  static syncSource(cells, picked, phase, done) {
+    const used = Object.create(null);
+    for (let i = 0; i < picked.length; i++) used[picked[i]] = true;
+    for (let i = 0; i < cells.length; i++) {
+      if (done) cells[i].setMode(done);
+      else if (phase === "wrong" && used[i]) cells[i].setMode("wrong");
+      else if (used[i]) cells[i].setMode("used");
+      else cells[i].setMode("selected");
+    }
+  }
+
+  static syncGuess(cells, guess, phase, done) {
+    for (let i = 0; i < cells.length; i++) {
+      const ch = guess[i] || "";
+      cells[i].setLetter(ch);
+      if (!ch) cells[i].setMode("idle");
+      else if (done) cells[i].setMode(done);
+      else if (phase === "wrong") cells[i].setMode("wrong");
+      else cells[i].setMode("selected");
+    }
   }
 }
