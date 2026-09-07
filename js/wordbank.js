@@ -10,6 +10,15 @@ class WordBank {
     return String(word).toLowerCase().split("").sort().join("");
   }
 
+  static stays(word, jumble) {
+    let n = 0;
+    const a = String(word);
+    const b = String(jumble);
+    const len = Math.min(a.length, b.length);
+    for (let i = 0; i < len; i++) if (a[i] === b[i]) n += 1;
+    return n;
+  }
+
   parse(text) {
     const raw = String(text).replace(/^\uFEFF/, "").split(/\r\n|\n|\r/);
     const lines = [];
@@ -54,8 +63,10 @@ class WordBank {
   }
 
   scramble(word) {
-    const letters = String(word).split("");
-    if (letters.length < 2) return word;
+    const source = String(word);
+    const letters = source.split("");
+    if (letters.length < 2) return source;
+    let out = source;
     for (let attempt = 0; attempt < 20; attempt++) {
       for (let i = letters.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -63,10 +74,10 @@ class WordBank {
         letters[i] = letters[j];
         letters[j] = tmp;
       }
-      const out = letters.join("");
-      if (out !== word) return out;
+      out = letters.join("");
+      if (WordBank.stays(source, out) <= 2) return out;
     }
-    return letters.join("");
+    return out;
   }
 
   answersOf(word) {
