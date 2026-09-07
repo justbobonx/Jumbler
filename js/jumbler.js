@@ -1,5 +1,5 @@
 (() => {
-  const VERSION = window.VERSION || "0.8.5";
+  const VERSION = window.VERSION || "0.8.6";
   const canvas = document.getElementById("stage");
   const ctx = canvas.getContext("2d");
   const chrome = new PlayChrome(
@@ -31,6 +31,7 @@
   }
 
   window.addEventListener("resize", game.onResize);
+  if (window.visualViewport) window.visualViewport.addEventListener("resize", game.onResize);
   window.addEventListener("orientationchange", function () { setTimeout(game.onResize, 200); });
   document.addEventListener("fullscreenchange", game.onResize);
   document.addEventListener("webkitfullscreenchange", game.onResize);

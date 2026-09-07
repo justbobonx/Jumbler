@@ -9,6 +9,10 @@ class PlayChrome {
   }
 
   viewSize() {
+    const vv = window.visualViewport;
+    if (vv && !this.stageSwapped()) {
+      return { w: Math.round(vv.width), h: Math.round(vv.height) };
+    }
     return {
       w: this.container.clientWidth || window.innerWidth,
       h: this.container.clientHeight || window.innerHeight,
