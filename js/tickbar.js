@@ -30,7 +30,7 @@ class TickBar {
   }
 
   startLast(wordLen, remaining) {
-    this.start("last", wordLen * remaining);
+    this.start("last", .5 + Math.floor(wordLen * (remaining/2)) );
   }
 
   clear() {
@@ -55,8 +55,8 @@ class TickBar {
   layout(w, y) {
     const n = Math.max(2, this.letters);
     this.gap = 4;
-    this.boxW = Math.max(8, Math.min(16, Math.floor((w * 0.4 - this.gap * (n - 1)) / n)));
-    this.boxH = Math.max(7, Math.round(this.boxW * 0.7));
+    this.boxW = Math.max(8, Math.min(16, Math.floor((w * 0.8 - this.gap * (n - 1)) / n)));
+    this.boxH = Math.max(7, Math.round(this.boxW * 1.2));
     this.y = y;
   }
 
@@ -66,8 +66,8 @@ class TickBar {
   }
 
   colorFor(playerColor) {
-    if (this.kind === "last") return "#f2f2f2";
-    return playerColor || "#f2f2f2";
+    if (this.kind === "last") return "#bbbbbb";
+    return playerColor || "#bbbbbb";
   }
 
   draw(ctx, w, color) {
