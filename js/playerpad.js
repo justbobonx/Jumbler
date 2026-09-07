@@ -40,14 +40,14 @@ class PlayerPad {
       return [
         { x: leftX, y: botY, rot: 0 },
         { x: rightX, y: botY, rot: 0 },
-        { x: sideLeftX, y: topY, rot: 270 },
+        { x: sideLeftX, y: topY, rot: 90 },
       ];
     }
     return [
       { x: leftX, y: botY, rot: 0 },
       { x: rightX, y: botY, rot: 0 },
-      { x: sideLeftX, y: topY, rot: 270 },
-      { x: sideRightX, y: topY, rot: 90 },
+      { x: sideLeftX, y: topY, rot: 90 },
+      { x: sideRightX, y: topY, rot: 270 },
     ];
   }
 
