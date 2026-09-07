@@ -1,5 +1,6 @@
 class GameSave {
   static KEY = "JumblerSave";
+  static HI_KEY = "JumblerHi";
 
   static read() {
     try {
@@ -25,6 +26,21 @@ class GameSave {
   static clear() {
     try {
       localStorage.removeItem(GameSave.KEY);
+    } catch (err) {}
+  }
+
+  static readHi() {
+    try {
+      const n = parseInt(localStorage.getItem(GameSave.HI_KEY), 10);
+      return Number.isFinite(n) ? n : 0;
+    } catch (err) {
+      return 0;
+    }
+  }
+
+  static writeHi(n) {
+    try {
+      localStorage.setItem(GameSave.HI_KEY, String(n));
     } catch (err) {}
   }
 }
