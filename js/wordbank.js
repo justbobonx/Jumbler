@@ -19,32 +19,34 @@ class WordBank {
     return n;
   }
 
-  parse(text) {
+  // pickable: words may be chosen by pickWord. false only merges anagram answers.
+  // lengths: packed line widths. Pickable lists always use LENGTHS.
+  parse(text, pickable, lengths) {
     const raw = String(text).replace(/^\uFEFF/, "").split(/\r\n|\n|\r/);
+    const eligible = pickable !== false;
+    const useLengths = eligible ? WordBank.LENGTHS : (lengths || WordBank.LENGTHS);
     const lines = [];
-    const groups = Object.create(null);
+    const groups = this.groups;
 
-    for (let i = 0; i < WordBank.LENGTHS.length; i++) {
+    for (let i = 0; i < useLengths.length; i++) {
       const line = (raw[i] || "").replace(/\s+/g, "");
-      const len = WordBank.LENGTHS[i];
+      const len = useLengths[i];
       if (line.length < len || line.length % len !== 0) {
         throw new Error("line " + (i + 1) + " is not a clean pack of " + len + "-letter words");
       }
-      lines.push(line);
+      if (eligible) lines.push(line);
 
-      const seen = Object.create(null);
       for (let pos = 0; pos < line.length; pos += len) {
         const word = line.substr(pos, len).toUpperCase();
-        if (seen[word]) continue;
-        seen[word] = true;
         const key = len + ":" + WordBank.signature(word);
         if (!groups[key]) groups[key] = [];
+        if (groups[key].indexOf(word) !== -1) continue;
         groups[key].push(word);
       }
     }
 
     for (const key in groups) groups[key].sort();
-    this.lines = lines;
+    if (eligible) this.lines = lines;
     this.groups = groups;
     return this;
   }

@@ -102,6 +102,7 @@ class PlayerBoard {
     this.count = 1;
     this.scores = [0, 0, 0, 0];
     this.locked = [false, false, false, false];
+    this.out = [false, false, false, false];
     this.buzzAnim = null;
   }
 
@@ -111,6 +112,7 @@ class PlayerBoard {
 
   resetRound() {
     this.locked = [false, false, false, false];
+    this.out = [false, false, false, false];
     this.buzzAnim = null;
   }
 

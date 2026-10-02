@@ -22,12 +22,27 @@ class Play {
     this.lockTimer = 0;
     this.playerCount = 1;
     this.activePlayer = -1;
+    this.timed = false;
+    this.turns = false;
+    this.turn = 0;
+    this.steals = false;
+    this.dealt = false;
     this.refresh = function () {};
     this.onResize = function () {};
+    const opts = GameSave.readOpts();
+    if (opts) {
+      this.timed = !!opts.timed;
+      this.turns = !!opts.turns;
+      if (opts.playerCount) this.playerCount = Math.max(1, Math.min(4, opts.playerCount));
+    }
   }
 
   isMulti() {
     return this.playerCount > 1;
+  }
+
+  usesTurns() {
+    return this.turns && this.isMulti();
   }
 
   extrasForDisplay() {
@@ -70,6 +85,10 @@ class Play {
     }
   }
 
+  saveOpts() {
+    GameSave.writeOpts({ timed: this.timed, turns: this.turns, playerCount: this.playerCount });
+  }
+
   snapshot() {
     return {
       word: this.word, jumble: this.jumble, answers: this.answers.slice(),
@@ -79,6 +98,8 @@ class Play {
       lastResult: this.lastResult, missedThisWord: this.missedThisWord,
       playerCount: this.playerCount, activePlayer: this.phase === "wrong" ? -1 : this.activePlayer,
       scores: this.board.scores.slice(), locked: this.board.locked.slice(),
+      out: (this.board.out || [false, false, false, false]).slice(),
+      timed: this.timed, turns: this.turns, turn: this.turn, steals: this.steals,
     };
   }
 
@@ -97,12 +118,20 @@ class Play {
     this.missedThisWord = !!data.missedThisWord;
     this.playerCount = Math.max(1, Math.min(4, data.playerCount || 1));
     this.activePlayer = data.activePlayer == null ? -1 : data.activePlayer;
+    this.timed = !!data.timed;
+    this.turns = !!data.turns;
+    this.turn = data.turn || 0;
+    this.steals = !!data.steals;
+    this.dealt = true;
     this.board.count = this.playerCount;
     this.board.scores = (data.scores || [0, 0, 0, 0]).slice();
     this.board.locked = (data.locked || [false, false, false, false]).slice();
+    this.board.out = (data.out || this.board.locked.slice()).slice();
     this.board.buzzAnim = null;
     this.phase = data.phase || (this.isMulti() ? "buzz" : "play");
+    if (this.usesTurns() && !this.steals) this.lockToTurn();
     this.startTicksForPhase();
+    this.saveOpts();
     return true;
   }
 
@@ -114,13 +143,23 @@ class Play {
   applySavedPlayerCount() {
     const data = GameSave.read();
     if (data && data.playerCount) this.playerCount = Math.max(1, Math.min(4, data.playerCount));
+    const opts = GameSave.readOpts();
+    if (opts) {
+      this.timed = !!opts.timed;
+      this.turns = !!opts.turns;
+      if (!data && opts.playerCount) this.playerCount = Math.max(1, Math.min(4, opts.playerCount));
+    }
   }
 
   startTicksForPhase() {
     this.ticks.clear();
-    if (!this.isMulti()) return;
+    if (!this.timed) return;
+    if (!this.isMulti()) {
+      if (this.phase === "play") this.ticks.startGuess(this.jumble.length);
+      return;
+    }
     if (this.phase === "play" && this.activePlayer >= 0) this.ticks.startGuess(this.jumble.length);
-    else if (this.phase === "buzz" && this.board.remaining() > 0 && this.board.remaining() < this.playerCount) {
+    else if (this.phase === "buzz" && !(this.usesTurns() && !this.steals) && this.board.remaining() > 0 && this.board.remaining() < this.playerCount) {
       this.ticks.startLast(this.jumble.length, this.board.remaining());
     }
   }
@@ -154,6 +193,9 @@ class Play {
     this.rights = 0;
     this.wrongs = 0;
     this.score = 0;
+    this.turn = 0;
+    this.steals = false;
+    this.dealt = false;
     return this.chrome.enterPlay(() => this.onResize()).then(() => this.nextWord());
   }
 
@@ -169,7 +211,36 @@ class Play {
     const next = Math.max(1, Math.min(4, this.playerCount + delta));
     if (next === this.playerCount) return;
     this.playerCount = next;
+    this.turn = 0;
     GameSave.clear();
+    this.saveOpts();
+  }
+
+  setOption(id) {
+    if (id === "timed") this.timed = !this.timed;
+    else if (id === "turns") this.turns = !this.turns;
+    else return;
+    GameSave.clear();
+    this.saveOpts();
+  }
+
+  lockToTurn() {
+    for (let i = 0; i < this.playerCount; i++) this.board.locked[i] = i !== this.turn;
+  }
+
+  advanceTurn() {
+    if (this.playerCount > 0) this.turn = (this.turn + 1) % this.playerCount;
+  }
+
+  openSteals() {
+    this.steals = true;
+    this.picked = [];
+    this.guess = "";
+    this.activePlayer = -1;
+    this.board.buzzAnim = null;
+    for (let i = 0; i < this.playerCount; i++) this.board.locked[i] = !!this.board.out[i];
+    this.phase = "buzz";
+    this.startTicksForPhase();
   }
 
   resetGuess() {
@@ -178,6 +249,7 @@ class Play {
     this.picked = [];
     this.guess = "";
     this.phase = "play";
+    this.startTicksForPhase();
   }
 
   returnToBuzz() {
@@ -187,31 +259,46 @@ class Play {
     this.activePlayer = -1;
     this.board.buzzAnim = null;
     this.ticks.clear();
-    if (this.board.remaining() <= 0) {
+    if (this.board.remaining() <= 0 && !this.usesTurns()) {
       this.phase = "revealed";
       this.guess = this.word;
     } else {
       this.phase = "buzz";
-      if (this.board.remaining() < this.playerCount) this.ticks.startLast(this.jumble.length, this.board.remaining());
+      if (this.usesTurns() && !this.steals) this.lockToTurn();
+      this.startTicksForPhase();
     }
   }
 
   markWrong() {
     if (this.activePlayer >= 0) {
       this.board.scores[this.activePlayer] -= 1;
+      this.board.out[this.activePlayer] = true;
       this.board.locked[this.activePlayer] = true;
     }
     this.phase = "wrong";
     this.lastResult = "wrong";
     this.clearLock();
     this.lockTimer = setTimeout(() => {
-      this.returnToBuzz();
+      if (this.usesTurns()) this.openSteals();
+      else this.returnToBuzz();
       this.refresh();
     }, 2000);
   }
 
   forceWrong() {
-    if (!this.isMulti() || this.phase !== "play") return;
+    if (!this.isMulti() || this.phase !== "play") {
+      if (!this.isMulti() && this.phase === "play") {
+        this.ticks.clear();
+        this.missedThisWord = true;
+        this.wrongs += 1;
+        this.score -= 10;
+        this.lastResult = "wrong";
+        this.phase = "revealed";
+        this.picked = [];
+        this.guess = this.word;
+      }
+      return;
+    }
     this.ticks.clear();
     this.markWrong();
   }
@@ -249,6 +336,7 @@ class Play {
     this.guess = "";
     this.phase = "play";
     this.ticks.startGuess(this.jumble.length);
+    if (!this.timed) this.ticks.clear();
   }
 
   buzzIn(index) {
@@ -287,6 +375,22 @@ class Play {
   reveal() {
     if (this.phase === "loading" || this.phase === "error" || this.phase === "title" || this.phase === "revealed") return;
     if (this.phase === "correct" && this.isMulti()) return;
+    if (this.usesTurns()) {
+      this.clearLock();
+      this.ticks.clear();
+      if (this.steals) {
+        this.phase = "revealed";
+        this.picked = [];
+        this.guess = this.word;
+        if (this.lastResult !== "right") this.lastResult = "wrong";
+        return;
+      }
+      const who = this.activePlayer >= 0 ? this.activePlayer : this.turn;
+      this.board.out[who] = true;
+      this.board.locked[who] = true;
+      this.openSteals();
+      return;
+    }
     if (this.isMulti() && this.activePlayer >= 0 && (this.phase === "play" || this.phase === "wrong")) {
       this.ticks.clear();
       this.markWrong();
@@ -311,7 +415,11 @@ class Play {
     if (this.phase === "error" || !this.bank.ready) return;
     this.clearLock();
     this.ticks.clear();
+    if (this.dealt) this.advanceTurn();
+    this.dealt = true;
+    this.steals = false;
     this.board.resetRound();
+    if (this.usesTurns()) this.lockToTurn();
     this.word = this.bank.pickWord();
     this.jumble = this.bank.scramble(this.word);
     this.answers = this.bank.answersOf(this.word);
@@ -321,6 +429,7 @@ class Play {
     this.missedThisWord = false;
     this.activePlayer = -1;
     this.phase = this.isMulti() ? "buzz" : "play";
+    this.startTicksForPhase();
   }
 
   onTap(p) {
@@ -329,6 +438,7 @@ class Play {
       const step = this.view.hitStepper(p);
       if (step && step.id === "minus") return this.changePlayers(-1);
       if (step && step.id === "plus") return this.changePlayers(1);
+      if (step && (step.id === "timed" || step.id === "turns")) return this.setOption(step.id);
     }
     const btn = this.view.hitButton(p);
     if (btn) {

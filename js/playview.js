@@ -88,14 +88,33 @@ class PlayView {
     return y + box;
   }
 
+  layoutToggles(ctx, play, w, y) {
+    const boxH = 40;
+    const gap = 10;
+    const rows = [
+      { id: "timed", text: play.timed ? "timed ON" : "timed OFF" },
+      { id: "turns", text: play.turns ? "turns ON" : "turns OFF" },
+    ];
+    ctx.font = "600 15px system-ui, sans-serif";
+    const widths = [];
+    for (let i = 0; i < rows.length; i++) widths.push(Math.max(92, ctx.measureText(rows[i].text).width + 16));
+    let x = w / 2 - (widths[0] + gap + widths[1]) / 2;
+    for (let i = 0; i < rows.length; i++) {
+      this.stepper.push({ id: rows[i].id, text: rows[i].text, x: x, y: y, w: widths[i], h: boxH });
+      x += widths[i] + gap;
+    }
+    return y + boxH;
+  }
+
   layoutTitle(ctx, play) {
     const sizeV = this.chrome.viewSize();
     const w = sizeV.w, h = sizeV.h;
-    const size = LetterCell.sizeFor(7, w * 0.9, Math.min(w, h) * 0.18);
+    const size = LetterCell.sizeFor(7, w * 0.9, Math.min(w, h) * 0.16);
     const gap = Math.max(5, Math.round(size * 0.08));
-    const titleY = h * 0.30;
+    const titleY = h * 0.22;
     this.titleCells = LetterCell.row("JUMBLER", w / 2, titleY, size, gap, { mode: "revealed" });
-    let y = this.layoutStepper(ctx, play, w, h, titleY + size / 2) + 22;
+    let y = this.layoutStepper(ctx, play, w, h, titleY + size / 2) + 16;
+    y = this.layoutToggles(ctx, play, w, y) + 8;
     const btnW = Math.max(120, Math.min(168, w * 0.32));
     const btnH = Math.max(36, Math.min(44, h * 0.06));
     if (GameSave.exists()) y = this.addTitleButton("continue", w, y, btnW, btnH);
@@ -132,8 +151,7 @@ class PlayView {
     if (showGuess) {
       const guessSize = LetterCell.sizeFor(n, maxWidth * 0.72, Math.min(w, h) * 0.1);
       const guessGap = LetterCell.gapFor(guessSize, 0.08);
-      //const hintSpace = Math.max(26, guessSize * 0.7);
-      const hintSpace = 30; //no hint but stil small gap
+      const hintSpace = 30;
       const guessY = mainY - mainSize * 0.5 - hintSpace - guessSize * 0.5;
       this.guessCells = LetterCell.row("", w / 2, guessY, guessSize, guessGap, { count: n });
       this.hintY = (guessY + guessSize / 2 + mainY - mainSize / 2) / 2;
@@ -209,9 +227,10 @@ class PlayView {
       LetterCell.roundRect(ctx, s.x, s.y, s.w, s.h, 10);
       ctx.fillStyle = "rgba(255,255,255,0.06)"; ctx.fill();
       ctx.strokeStyle = "#888888"; ctx.lineWidth = 1.25; ctx.stroke();
-      ctx.fillStyle = "#d0d0d0"; ctx.font = "700 20px system-ui, sans-serif";
+      ctx.fillStyle = "#d0d0d0"; ctx.font = s.text ? "600 16px system-ui, sans-serif" : "700 20px system-ui, sans-serif";
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillText(s.id === "minus" ? "\u2212" : "+", s.x + s.w / 2, s.y + s.h / 2 + 1);
+      const mark = s.text || (s.id === "minus" ? "\u2212" : "+");
+      ctx.fillText(mark, s.x + s.w / 2, s.y + s.h / 2 + 1);
     }
   }
 
@@ -277,16 +296,15 @@ class PlayView {
     }
     this.drawScore(ctx, play, w, h);
     LetterCell.paint(ctx, this.guessCells);
-    // const hint = play.hintText();
-    // if (hint) {
-      // ctx.fillStyle = this.hintColor(play);
-      // ctx.textAlign = "center";
-      // ctx.textBaseline = "middle";
-      // ctx.font = "500 " + Math.max(12, Math.min(w, h) * 0.024) + "px system-ui, sans-serif";
-      // ctx.fillText(hint, w / 2, this.hintY);
-    // }
     LetterCell.paint(ctx, this.sourceCells);
     const playerColor = play.activePlayer >= 0 ? PlayerPad.spec(play.activePlayer).fill : "";
+    if (play.steals && play.phase === "buzz" && !this.ticks.until) {
+      ctx.fillStyle = "#bbbbbb";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      ctx.font = "700 " + Math.max(14, Math.min(w, h) * 0.03) + "px system-ui, sans-serif";
+      ctx.fillText("STEAL?", w / 2, this.ticks.y);
+    }
     this.ticks.draw(ctx, w, this.ticks.colorFor(playerColor));
     this.board.draw(ctx);
     if (this.extraText.length) {

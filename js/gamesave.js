@@ -1,6 +1,7 @@
 class GameSave {
   static KEY = "JumblerSave";
   static HI_KEY = "JumblerHi";
+  static OPT_KEY = "JumblerOpts";
 
   static read() {
     try {
@@ -41,6 +42,23 @@ class GameSave {
   static writeHi(n) {
     try {
       localStorage.setItem(GameSave.HI_KEY, String(n));
+    } catch (err) {}
+  }
+
+  static readOpts() {
+    try {
+      const raw = localStorage.getItem(GameSave.OPT_KEY);
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      return data && typeof data === "object" ? data : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  static writeOpts(data) {
+    try {
+      localStorage.setItem(GameSave.OPT_KEY, JSON.stringify(data));
     } catch (err) {}
   }
 }

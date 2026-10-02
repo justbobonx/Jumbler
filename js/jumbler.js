@@ -56,21 +56,28 @@
     else paint(false);
   });
 
+  function loadText(path) {
+    return fetch(path + "?v=" + encodeURIComponent(VERSION)).then((res) => {
+      if (!res.ok) throw new Error("could not load " + path + " (" + res.status + ")");
+      return res.text();
+    });
+  }
+
   paint(true);
   requestAnimationFrame(tickFrame);
-  fetch("data/letters.txt?v=" + encodeURIComponent(VERSION))
-    .then((res) => {
-      if (!res.ok) throw new Error("could not load letters.txt (" + res.status + ")");
-      return res.text();
-    })
-    .then((text) => {
-      bank.parse(text);
+  Promise.all([
+    loadText("data/letters.txt"),
+    loadText("data/letters-extras.txt"),
+  ])
+    .then((texts) => {
+      bank.parse(texts[0], true);
+      bank.parse(texts[1], false, [3, 4, 5, 6, 7, 8]);
       game.showTitle();
       paint(true);
     })
     .catch((err) => {
       game.phase = "error";
-      game.message = err.message || "failed to load letters.txt";
+      game.message = err.message || "failed to load letters";
       paint(false);
     });
 })();
